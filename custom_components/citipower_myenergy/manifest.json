@@ -6,10 +6,10 @@
   "dependencies": [
     "recorder"
   ],
-  "documentation": "https://github.com/OWNER/ha-citipower-myenergy",
+  "documentation": "https://github.com/markesss/ha-citipower-myenergy",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/OWNER/ha-citipower-myenergy/issues",
+  "issue_tracker": "https://github.com/markesss/ha-citipower-myenergy/issues",
   "requirements": [],
   "version": "0.1.0"
 }
