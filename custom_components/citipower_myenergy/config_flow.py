@@ -120,7 +120,8 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
                 )
             except MyEnergyInvalidAuth:
                 errors["base"] = "invalid_auth"
-            except MyEnergyCannotConnect:
+            except MyEnergyCannotConnect as err:
+                _LOGGER.warning("Could not reach myEnergy: %s", err)
                 errors["base"] = "cannot_connect"
             except MyEnergyError:
                 _LOGGER.exception("Unexpected error signing in to myEnergy")
@@ -143,7 +144,8 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
             method = (user_input or {}).get(CONF_MFA_METHOD) or page.options[0]
             try:
                 await self._login.async_send_code(method)
-            except MyEnergyCannotConnect:
+            except MyEnergyCannotConnect as err:
+                _LOGGER.warning("Could not reach myEnergy: %s", err)
                 errors["base"] = "cannot_connect"
             except MyEnergyError as err:
                 _LOGGER.warning("myEnergy could not send a code by %s: %s", method, err)
@@ -194,7 +196,8 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
             except MyEnergyInvalidCode as err:
                 self._code_error = str(err)
                 errors["base"] = "invalid_code"
-            except MyEnergyCannotConnect:
+            except MyEnergyCannotConnect as err:
+                _LOGGER.warning("Could not reach myEnergy: %s", err)
                 errors["base"] = "cannot_connect"
             except MyEnergyError:
                 _LOGGER.exception("Unexpected error verifying the myEnergy code")
@@ -218,7 +221,8 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
             if self._signed_in is None:
                 self._signed_in = await self._login.async_finish()
             self._nmis = [nmi for nmi in await self._api().async_list_nmis() if nmi.active]
-        except MyEnergyCannotConnect:
+        except MyEnergyCannotConnect as err:
+            _LOGGER.warning("Could not reach myEnergy: %s", err)
             return self.async_abort(reason="cannot_connect")
         except MyEnergyError:
             _LOGGER.exception("Signed in to myEnergy but could not list the NMIs")
