@@ -1,0 +1,4 @@
+# pytest-homeassistant-custom-component pins the Home Assistant version it
+# tests against; homeassistant follows from it.
+pytest-homeassistant-custom-component==0.13.316
+ruff

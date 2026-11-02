@@ -1,0 +1,15 @@
+{
+  "domain": "citipower_myenergy",
+  "name": "CitiPower & Powercor myEnergy",
+  "codeowners": [],
+  "config_flow": true,
+  "dependencies": [
+    "recorder"
+  ],
+  "documentation": "https://github.com/OWNER/ha-citipower-myenergy",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/OWNER/ha-citipower-myenergy/issues",
+  "requirements": [],
+  "version": "0.1.0"
+}

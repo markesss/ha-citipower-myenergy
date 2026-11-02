@@ -1,0 +1,134 @@
+{
+ "actions": [
+  {
+   "id": "79;a",
+   "state": "SUCCESS",
+   "returnValue": {
+    "returnValue": {
+     "data": {
+      "hasNmiAssignmentsForEnergyUsage": true,
+      "nmiAssignmentsForEnergyUsage": [
+       {
+        "Id": "a1BOY000001uGj32AE",
+        "Name": "NMI-ASSIGN-6699019",
+        "Authorised_Representative__c": false,
+        "Customer_Property_Relationship__c": "Responsible Party",
+        "NMI__c": "a1C5g000000DkgkEAC",
+        "Description__c": "Home",
+        "Status__c": "Active",
+        "Is_Default_NMI__c": false,
+        "CreatedDate": "2026-10-23T11:51:17.000Z",
+        "NMI__r": {
+         "Name": "61020000001",
+         "Display_Address__c": "1 EXAMPLE STREET MELBOURNE VIC 3000",
+         "Customer_Type__c": "Domestic",
+         "Is_Life_Support__c": false,
+         "Id": "a1C5g000000DkgkEAC"
+        }
+       }
+      ],
+      "totalCountNmiAssignsForEnergyUsage": 1
+     },
+     "isSuccess": true
+    },
+    "cacheable": false
+   },
+   "error": []
+  }
+ ],
+ "context": {
+  "mode": "PROD",
+  "app": "siteforce:communityApp",
+  "contextPath": "/s/sfsites",
+  "pathPrefix": "",
+  "fwuid": "ZVYtV2g3NHN0UGNVNzBMbldfZ0ZwZ2tVMjdnTGFERUU2S3FfSVdrcU92bkExNS4zLjE2MDEw",
+  "mlr": 1,
+  "uad": 1,
+  "coos": 1,
+  "loaded": {
+   "APPLICATION@markup://siteforce:communityApp": "1897_Qx6CsUG7r803A_23Hon_1g"
+  },
+  "globalValueProviders": [
+   {
+    "type": "$Global",
+    "values": {
+     "eswConfigDeveloperName": {
+      "writable": true,
+      "defaultValue": ""
+     },
+     "isVoiceOver": {
+      "writable": true,
+      "defaultValue": false
+     },
+     "setupAppContextId": {
+      "writable": true,
+      "defaultValue": ""
+     },
+     "density": {
+      "writable": true,
+      "defaultValue": ""
+     },
+     "srcdoc": {
+      "writable": false,
+      "defaultValue": false
+     },
+     "appContextId": {
+      "writable": true,
+      "defaultValue": ""
+     },
+     "dynamicTypeSize": {
+      "writable": true,
+      "defaultValue": ""
+     }
+    }
+   }
+  ],
+  "enableAccessChecks": true,
+  "dns": "c",
+  "rns": [
+   "vlocity_cmt"
+  ],
+  "ls": 1,
+  "lairn": [],
+  "laerc": [],
+  "lav": "68",
+  "lgef": [
+   "com.salesforce.locker.enableImmediateGlobalObjectPatching",
+   "com.salesforce.locker.enableTrustedTypesScript",
+   "com.salesforce.locker.walkRangeProtoChainForMethods",
+   "com.salesforce.locker.changesSince.258",
+   "com.salesforce.locker.changesSince.256",
+   "com.salesforce.locker.enabledChangesSince.256",
+   "com.salesforce.locker.temporaryGate",
+   "com.salesforce.locker.changesSince.262",
+   "com.salesforce.locker.enableSfdcLiveObject"
+  ],
+  "cfcsd": "https://a.static.lightning.force.com/aus66.sfdc-vwfla6",
+  "cpf": 4,
+  "mna": {
+   "lightning": "interop"
+  },
+  "arse": 1,
+  "acaf": 1,
+  "icld": 1,
+  "ccv": "60611976",
+  "services": [
+   "markup://lightning:configProvider",
+   "markup://force:salesforceScopedModuleResolver",
+   "markup://force:ldsEngineCreator",
+   "markup://instrumentation:locatorService"
+  ]
+ },
+ "perfSummary": {
+  "version": "core",
+  "request": 170,
+  "actions": {
+   "79;a": {
+    "total": 150,
+    "db": 17
+   }
+  },
+  "actionsTotal": 150,
+  "overhead": 0
+ }
+}

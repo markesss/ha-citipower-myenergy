@@ -1,0 +1,86 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sign in to myEnergy",
+        "description": "Use the email and password you use at myenergy.powercor.com.au. The password is only used to sign in and is not stored.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      },
+      "method": {
+        "title": "Verification code",
+        "description": "Choose where myEnergy should send your verification code.\n\n{detail}",
+        "data": {
+          "mfa_method": "Send the code by"
+        }
+      },
+      "code": {
+        "title": "Enter the verification code",
+        "description": "myEnergy sent a {digits}-digit code by {method}. Enter it below, or tick resend to have a new one sent.\n\n{detail}",
+        "data": {
+          "code": "Verification code",
+          "resend": "Send a new code"
+        }
+      },
+      "nmi": {
+        "title": "Choose a meter",
+        "description": "This login can see more than one NMI. Choose the one to import.",
+        "data": {
+          "nmi": "NMI"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Sign in to myEnergy again",
+        "description": "The myEnergy session has ended. Sign in again to resume importing readings; a new verification code will be sent.",
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "myEnergy did not accept that email address or password.",
+      "cannot_connect": "Could not reach myEnergy. Try again shortly.",
+      "unknown": "Something unexpected went wrong. The log has the details.",
+      "send_failed": "myEnergy could not send a code that way. Try the other option.",
+      "code_resent": "A new code has been sent.",
+      "code_required": "Enter the 6-digit code.",
+      "invalid_code": "myEnergy did not accept that code."
+    },
+    "abort": {
+      "already_configured": "This NMI is already set up.",
+      "reauth_successful": "Signed in again. Readings will resume.",
+      "wrong_account": "That login cannot see the NMI this entry follows.",
+      "no_nmis": "This login has no active NMIs with energy usage data.",
+      "cannot_connect": "Could not reach myEnergy. Try again shortly.",
+      "unknown": "Something unexpected went wrong. The log has the details."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Session keep-alive",
+        "description": "myEnergy ends a session after two hours idle, and Salesforce only extends a session when a request comes in the second half of that time. Keep this under 60 minutes.",
+        "data": {
+          "keepalive_minutes": "Keep-alive interval"
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "latest_data": {
+        "name": "Latest data"
+      },
+      "session": {
+        "name": "Session",
+        "state": {
+          "active": "Active",
+          "expired": "Expired"
+        }
+      }
+    }
+  }
+}

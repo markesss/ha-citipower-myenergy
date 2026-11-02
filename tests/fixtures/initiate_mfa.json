@@ -1,0 +1,1 @@
+[{"statusCode":200,"type":"rpc","tid":2,"ref":false,"action":"MFAEnablerController","method":"initiateMFA","result":{"isRegistration":false,"success":true,"verificationIdentifier":"MFF0T1kwMDAwMFIwdWd6"}}]

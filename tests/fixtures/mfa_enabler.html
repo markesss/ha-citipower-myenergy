@@ -1,0 +1,848 @@
+
+<!DOCTYPE HTML>
+<html lang="en-US" lang="en-US">
+    <head>
+<script src="/static/111213/js/perf/stub.js" type="text/javascript"></script><script src="/jslibrary/1637251311264/sfdc/VFRemote.js" type="text/javascript"></script><script src="/jslibrary/1752551382264/ui-sfdc-javascript-impl/SfdcCore.js" type="text/javascript"></script><script src="/jslibrary/1746634855264/sfdc/IframeThirdPartyContextLogging.js" type="text/javascript"></script><script src="/static/111213/js/picklist4.js" type="text/javascript"></script><script src="/jslibrary/1686615502264/sfdc/VFState.js" type="text/javascript"></script><link class="user" href="/slds/css/foFV-lXXRH4om1HWnzlidg/min/scoped/one:oneNamespace,force:sldsTokens,force:base,force:formFactorLarge/slds.css" rel="stylesheet" type="text/css" /><script src="/jslibrary/1647410351264/sfdc/NetworkTracking.js" type="text/javascript"></script><script>try{ NetworkTracking.init('/_ui/networks/tracking/NetworkTrackingServlet', 'network', '066OY0000004czZ'); }catch(x){}</script><script>(function(UITheme) {
+    UITheme.getUITheme = function() { 
+        return UserContext.uiTheme;
+    };
+}(window.UITheme = window.UITheme || {}));</script><script type="text/javascript">
+Visualforce.remoting.Manager.add(new $VFRM.RemotingProviderImpl({"vf":{"vid":"066OY0000004czZ","xhr":false,"dev":false,"tst":false,"dbg":false,"tm":1793533490339,"ovrprm":false},"actions":{"MFAEnablerController":{"ms":[{"name":"initiateMFA","len":1,"ns":"","ver":60.0,"csrf":"REDACTED","authorization":"REDACTED"},{"name":"verifyMFA","len":4,"ns":"","ver":60.0,"csrf":"REDACTED","authorization":"REDACTED"},{"name":"verifyMFARegister","len":2,"ns":"","ver":60.0,"csrf":"REDACTED","authorization":"REDACTED"}],"prm":1}},"service":"apexremote"}));
+</script><meta HTTP-EQUIV="PRAGMA" CONTENT="NO-CACHE" />
+<meta HTTP-EQUIV="Expires" content="Mon, 01 Jan 1990 12:00:00 GMT" />
+
+        <title>myEnergy - Multi-factor authentication (MFA)</title>
+        <meta content="initial-scale=1.0, maximum-scale=5.0, minimum-scale=1.0, minimal-ui" name="viewport" />
+
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+
+        <style>
+            /* archivo normal text font: 400 */
+            @font-face {
+                font-family: "Archivo";
+                font-weight: 400;
+                src: url("/resource/1634001047000/archivo_font") format("woff");
+            }
+
+            /* archivo medium text font: 500 */
+            @font-face {
+                font-family: "Archivo";
+                font-weight: 500;
+                src: url("/resource/1718669002000/archivo_font_500") format("woff2");
+            }
+
+            /* archivo semi-bold text font: 600 */
+            @font-face {
+                font-family: "Archivo";
+                font-weight: 600;
+                src: url("/resource/1718669002000/archivo_font_600") format("woff2");
+            }
+
+            /* archivo bold text font: 700 */
+            @font-face {
+                font-family: "Archivo";
+                font-weight: 700;
+                src: url("/resource/1707346934000/archivo_font_700") format("woff");
+            }
+
+            /* CSS variables */
+            :root {
+                --register-background: linear-gradient(#4F01C4, #9A258F);
+                --text-blue: #00215B;
+                --text-red: #D01610;
+                --brand-vpn: #0079C1;
+                --brand-vpn-hover: #005a8f;
+                --brand-ue: #9A258F;
+                --brand-ue-hover: #801f76;
+                --disabled: #DEDEDE;
+                --grey-60: #737378;
+                --box-shadow-vpn: #0176d3;
+            }
+
+            .slds-scope .mfa ::selection {
+                color: var(--slds-g-color-neutral-base-10, var(--lwc-colorTextDefault, rgb(0, 33, 91)));
+            }
+
+            .slds-scope ::placeholder {
+                color: var(--grey-60);
+            }
+
+            * {
+                font-family: "Archivo", sans-serif;
+            }
+
+            .mfa .slds-spinner_container {
+                position: fixed;
+            }
+
+            .brand-VPN .mfa .slds-spinner_container *::before,
+            .brand-VPN .mfa .slds-spinner_container *::after {
+                background-color: var(--brand-vpn);
+            }
+            
+            .brand-UE .mfa .slds-spinner_container *::before,
+            .brand-UE .mfa .slds-spinner_container *::after {
+                background-color: var(--brand-ue);
+            }
+
+            .mfa h1, .mfa h2, .mfa label, .slds-scope .mfa input.slds-input {
+                font-family: "Archivo", sans-serif;
+                color: var(--text-blue);
+            }
+
+            .mfa .btn {
+                border: 1px solid var(--disabled);
+                border-radius: 4px;
+                padding: 0 16px;
+                font-size: 1rem;
+                font-weight: 700;
+                color: #fff;
+                padding: 5px 16px;
+                line-height: 20px;
+                width: 100%;
+            }
+
+            .brand-VPN .mfa .btn {
+                background-color: var(--brand-vpn);
+                border-color: var(--brand-vpn);
+            }
+
+            .brand-VPN .mfa .btn:hover {
+                background-color: var(--brand-vpn-hover);
+                border-color: var(--brand-vpn-hover);
+            }
+
+            .brand-VPN .mfa .btn:active,
+            .brand-VPN .mfa .btn:focus {
+                background-color: var(--brand-vpn-hover);
+                border-color: var(--brand-vpn-hover);
+            }
+
+            .brand-UE .mfa .btn {
+                background-color: var(--brand-ue);
+                border-color: var(--brand-ue);
+            }
+
+            .brand-UE .mfa .btn:hover {
+                background-color: var(--brand-ue-hover);
+                border-color: var(--brand-ue-hover);
+            }
+
+            .brand-UE .mfa .btn:active,
+            .brand-UE .mfa .btn:focus {
+                background-color: var(--brand-ue-hover);
+                border-color: var(--brand-ue-hover);
+            }
+
+            .mfa .btn[disabled],
+            .mfa .btn[disabled]:hover,
+            .mfa .btn[disabled]:active,
+            .mfa .btn[disabled]:focus {
+                background-color: var(--disabled);
+                border-color: var(--disabled);
+                box-shadow: none;
+                cursor: not-allowed;
+            }
+
+            .mfa .btn.logout { 
+                display: inline-block;
+                color: #fff;
+                text-decoration: none;
+                text-align: center;
+                margin-top: 30px;
+            }
+
+            .mfa .btn.logout:hover,
+            .mfa .btn.logout:active,
+            .mfa .btn.logout:focus { 
+                color: #fff;
+            }
+
+            .mfa .slds-has-error .slds-form-element__help {
+                color: var(--text-red);
+            }
+
+            .mfa .slds-has-error .slds-input {
+                border-color: var(--text-red);
+            }
+
+            .mfa .slds-has-error .slds-input:active,
+            .mfa .slds-has-error .slds-input:focus {
+                box-shadow: 0 0 0 1px inset var(--text-red), 0 0 3px 0 var(--text-red);
+                border-color: var(--text-red);
+            }
+
+            .mfa .slds-has-error .slds-input[disabled] {
+                background-color: var(--disabled);
+                color: var(--grey-60);
+            }
+
+            .mfa .slds-radio [type=radio][disabled] + .slds-radio__label .slds-radio_faux {
+                border-color: var(--grey-60);
+            }
+
+            .mfa .slds-radio [type=radio][disabled] + .slds-radio__label .slds-form-element__label {
+                color: var(--grey-60);
+            }
+
+            .mfa .slds-has-error .slds-input[disabled]:active,
+            .mfa .slds-has-error .slds-input[disabled]:focus {
+                box-shadow: 0 0 0 1px inset var(--text-red);
+            }
+
+            .mfa .slds-form-element__help {
+                line-height: 16px;
+                margin-top: 0;
+            }
+
+            .mfa h1 {
+                font-size: 2rem;
+                line-height: 40px;
+                font-weight: 700;
+                margin-bottom: 18px;
+            }
+
+            .mfa p {
+                color: var(--text-blue);
+                font-size: 1rem;
+                line-height: 24px;
+                margin-bottom: 15px;
+            }
+
+            .mfa a {
+                color: var(--brand-vpn);
+                text-decoration: underline;
+            }
+
+            .mfa a:hover,
+            .mfa a:active,
+            .mfa a:focus {
+                color: var(--brand-vpn-hover);
+            }
+
+            .brand-UE .mfa a {
+                color: var(--brand-ue);
+            }
+
+            .brand-UE .mfa a:hover,
+            .brand-UE .mfa a:active,
+            .brand-UE .mfa a:focus {
+                color: var(--brand-ue-hover);
+            }
+
+            .mfa label {
+                font-size: 0.875rem;
+                font-weight: 700;
+            }
+
+            .mfa .select-radio-options {
+                margin: 32px 0 0 0;
+            }
+
+            .mfa .select-radio-options .slds-radio__label {
+                display: flex;
+                margin-bottom: 20px;
+            }
+
+            .mfa .select-radio-options .slds-form-element__label {
+                color: var(--text-blue);
+                font-weight: 400;
+                font-size: 0.875rem;
+                line-height: 15px;
+                padding-top: 1px;
+            }
+
+            .mfa .select-radio-options .slds-radio .slds-radio_faux,
+            .mfa .select-radio-options .slds-radio [type=radio]:checked + .slds-radio__label .slds-radio_faux {
+                border-color: var(--grey-60);
+            }
+
+            .mfa .select-checkbox-option label {
+                font-weight: 400;
+                margin-left: 8px;
+            }
+
+            .login-col {
+                background: #fff;
+                padding: 20px;
+                align-content: center;
+
+                /* fix for ipad to vertically align left col */
+                display: -webkit-flex;
+                -webkit-align-items: center;
+            }
+
+            .login-col > div {
+                max-width: 410px;
+                margin: 0 auto;
+            }
+
+            .company-logo {
+                margin-bottom: 26px;
+            }
+
+            .side-image-col {
+                display: none;
+                background-position: center;
+                background-repeat: no-repeat;
+                min-height: 100vh;
+            }
+
+            .ext-safari4 .side-image-col {
+                height: -webkit-fill-available;
+                min-height: auto;
+            }
+
+            .brand-VPN .side-image-col {
+                background-image: url("/resource/1718669002000/MFA_VPN_lock_icon");
+            }
+
+            .brand-UE .side-image-col {
+                background-image: url("/resource/1718669002000/MFA_UE_lock_icon");
+            }
+
+            .brand-UE .ue-show,
+            .brand-VPN .vpn-show {
+                display: block;
+            }
+
+            .brand-UE .vpn-show,
+            .brand-VPN .ue-show {
+                display: none;
+            }
+
+            .mfa-form {
+                margin: 26px 0 14px;
+            }
+
+            .mfa-form-code {
+                margin: 30px 0 14px;
+            }
+
+            .mfa .help-links {
+                margin-top: 54px;
+            }
+
+            .mfa .help-links p {
+                font-size: 0.875rem;
+                margin-bottom: 8px;
+            }
+
+            .slds-form-element__control {
+                margin-bottom: 20px;
+            }
+
+            .link-logout {
+                font-size: 0.875rem;
+                font-weight: 700;
+                display: inline-block;
+                margin: 10px 0 0;
+            }
+
+            .asterisk {
+                color: var(--text-red);
+                margin-right: 4px;
+            }
+
+            .mfa .slds-input {
+                border-color: var(--grey-60);
+                font-size: 1rem;
+            }
+
+            .mfa #otpCode {
+                margin-top: 10px;
+            }
+
+            .mfa .slds-input.btn-code {
+                margin-bottom: 4px;
+            }
+
+            .mfa .slds-input.btn-code::-webkit-outer-spin-button,
+            .mfa .slds-input.btn-code::-webkit-inner-spin-button {
+                -webkit-appearance: none;
+                margin: 0;
+            }
+
+            .mfa .slds-notify_container {
+                z-index: 500;
+            }
+
+            .mfa .slds-notify_toast h2,
+            .mfa .slds-notify_toast p {
+                color: #fff;
+                margin-bottom: 0;
+            }
+
+            .mfa .slds-notify_toast p {
+                font-size: 0.8125rem;
+                line-height: 20px;
+            }
+
+            .mfa .slds-notify_toast {
+                margin: 0;
+                min-width: unset;
+                background-color: transparent;
+                padding: 12px 16px;
+                width: 100%;
+            }
+
+            .mfa .slds-notify_toast svg {
+                fill: #fff;
+            }
+
+            .brand-VPN .mfa .slds-notify_toast {
+                background-color: var(--brand-vpn);
+            }
+
+            .brand-UE .mfa .slds-notify_toast {
+                background-color: var(--brand-ue);
+            }
+
+            .mfa .error-alert .slds-notify_toast {
+                background-color: var(--text-red);
+            }
+
+            .mfa .slds-notify_toast h2 {
+                line-height: 24px;
+            }
+
+            .mfa .slds-notify_toast .slds-notify__close {
+                top: 24px;
+                right: 15px;
+            }
+
+            .mfa .slds-button {
+                transition: all .15s linear;
+            }
+
+            .mfa .slds-notify_toast .slds-button:hover {
+                color: rgba(255, 255, 255, 0.75);
+            }
+
+            /* small - medium devices (mobile/tablets, 500px and up) */
+            @media only screen and (min-width: 500px) {
+                .mfa .screen-two-code h1 {
+                    width: 420px;
+                }
+            }
+
+            /* medium devices (tablets, 1024px and up) */
+            @media only screen and (min-width: 1024px) {
+                .brand-VPN .mfa {
+                    background-color: var(--text-blue);
+                }
+
+                .brand-UE .mfa {
+                    background: var(--register-background);
+                }
+
+                .mfa h1 {
+                    margin-bottom: 25px;
+                }
+
+                .mfa p {
+                    margin-bottom: 24px;
+                }
+
+                .side-image-col {
+                    display: block;
+                }
+
+                .company-logo {
+                    margin-bottom: 40px;
+                }
+            }
+        </style>
+    </head>
+    
+    <body class="slds-scope">
+        <div class="mfa slds-grid">
+            <div class="slds-col slds-size--1-of-1 slds-large-size--1-of-2 login-col">
+                <div>
+                    <header>
+                        
+                        <img alt="CitiPower and Powercor myEnergy" class="vpn-show company-logo" height="76" src="/resource/1790577682000/Logo2026CitipowerPowercor" width="156" />
+                        <img alt="United Energy myEnergy" class="ue-show company-logo" height="100" src="/resource/1790577682000/Logo2026UnitedEnergy" width="100" />
+                    </header>
+
+                    <main>
+                        <div class="screen-one-select">
+                            <h1>Multi-factor authentication (MFA)</h1>
+                            <p>A verification code needs to be sent to you to verify your account before you can proceed. This is to help ensure the security of your account.</p>
+                            <p class="has-sms-option slds-hide">Please select your preferred verification method from the below options.</p>
+                            <p class="email-only">Please select a verification method to proceed.</p>
+
+                            <div class="error-alert slds-hide">
+                                <div class="slds-notify_container slds-is-relative">
+                                    <div class="slds-notify slds-notify_toast slds-theme_error" role="status">
+                                        <span class="slds-assistive-text">error</span>
+                                        <span class="slds-icon_container slds-icon-utility-error slds-m-right_small slds-no-flex slds-align-top">
+                                            <svg aria-hidden="true" class="slds-icon slds-icon_small"><use xlink:href="/_slds/icons/utility-sprite/svg/symbols.svg#error" xmlns:xlink="http://www.w3.org/1999/xlink"></use></svg>
+                                        </span>
+                                        <div class="slds-notify__content">
+                                            <h2 class="slds-text-heading_small"></h2>
+                                        </div>
+                                    </div>
+                                </div><a href="/secur/logout.jsp" class="btn logout">Logout</a>
+                            </div>
+<form id="j_id0:j_id9" name="j_id0:j_id9" method="post" action="/MFA_Enabler" class="mfa-form" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="j_id0:j_id9" value="j_id0:j_id9" />
+
+                                <div class="slds-form-element__control has-sms-option select-radio-options slds-hide">
+                                    <span class="slds-radio">
+                                        <input id="option-email" name="mfa-option-radio" type="radio" value="email" />
+                                        <label class="slds-radio__label" for="option-email">
+                                            <span class="slds-radio_faux"></span>
+                                            <span class="slds-form-element__label">Send an email to user@example.com</span>
+                                        </label>
+                                    </span>
+                                    <span class="slds-radio sms-option">
+                                        <input id="option-sms" name="mfa-option-radio" type="radio" value="sms" />
+                                        <label class="slds-radio__label" for="option-sms">
+                                            <span class="slds-radio_faux"></span>
+                                            <span class="slds-form-element__label">Send an SMS to 04** *** 000</span>
+                                        </label>
+                                    </span>
+                                </div>
+                                <div class="slds-form-element__control slds-grid select-checkbox-option"><input id="j_id0:j_id9:mfa-option" type="checkbox" name="j_id0:j_id9:mfa-option" /><label for="j_id0:j_id9:mfa-option">
+Send an email to user@example.com</label>
+                                </div>
+                                <input class="slds-button slds-button_brand btn" disabled="disabled" id="send-code-btn" type="button" value="Send verification code" /><div id="j_id0:j_id9:j_id39"></div>
+</form><span id="ajax-view-state-page-container" style="display: none"><span id="ajax-view-state" style="display: none"><input type="hidden"  id="com.salesforce.visualforce.ViewState" name="com.salesforce.visualforce.ViewState" value="REDACTED" /><input type="hidden"  id="com.salesforce.visualforce.ViewStateVersion" name="com.salesforce.visualforce.ViewStateVersion" value="202610290018410000" /><input type="hidden"  id="com.salesforce.visualforce.ViewStateMAC" name="com.salesforce.visualforce.ViewStateMAC" value="REDACTED" /><input type="hidden"  id="com.salesforce.visualforce.ViewStateCSRF" name="com.salesforce.visualforce.ViewStateCSRF" value="REDACTED" /></span></span>
+
+                            <div class="slds-text-align--center"><a href="/secur/logout.jsp" class="link-logout">Logout</a>
+                            </div>
+
+                            <div class="help-links">
+                                <p>Having login problems? Visit&nbsp;<a href="https://www.powercor.com.au/contact-us/multi-factor-authentication-mfa/" target="_blank" class="help-link">Help &amp; support</a></p>
+                            </div>
+                        </div>
+
+                        <div class="screen-two-code slds-hide">
+                            <h1>Enter your verification code</h1>
+
+                            <div class="email-content">
+                                <p>An email has been sent to your registered email address <strong>user@example.com</strong> containing a verification code. Please enter this code below to proceed.</p>
+                                <p>Can&#8217;t find it? Don&#8217;t forget to check your spam folder.</p>
+                            </div>
+
+                            <div class="sms-content slds-hide">
+                                <p>An SMS has been sent to your registered mobile number <strong>04** *** 000</strong> containing a verification code. Please enter this code below to proceed.</p>
+                            </div>
+
+                            <p><abbr class="asterisk" title="required">*</abbr>Required fields</p>
+
+                            <div class="error-alert slds-hide">
+                                <div class="slds-notify_container slds-is-relative">
+                                    <div class="slds-notify slds-notify_toast slds-theme_error" role="status">
+                                        <span class="slds-assistive-text">error</span>
+                                        <span class="slds-icon_container slds-icon-utility-error slds-m-right_small slds-no-flex slds-align-top">
+                                            <svg aria-hidden="true" class="slds-icon slds-icon_small"><use xlink:href="/_slds/icons/utility-sprite/svg/symbols.svg#error" xmlns:xlink="http://www.w3.org/1999/xlink"></use></svg>
+                                        </span>
+                                        <div class="slds-notify__content">
+                                            <h2 class="slds-text-heading_small"></h2>
+                                        </div>
+                                    </div>
+                                </div><a href="/secur/logout.jsp" class="btn logout">Logout</a>
+                            </div>
+
+                            <div class="info-alert alert-wrap slds-hide">
+                                <div class="slds-notify_container slds-is-relative">
+                                    <div class="slds-notify slds-notify_toast slds-theme_info" role="status">
+                                        <span class="slds-assistive-text">info</span>
+                                        <span class="slds-icon_container slds-icon-utility-info slds-m-right_small slds-no-flex slds-align-top">
+                                            <svg aria-hidden="true" class="slds-icon slds-icon_small"><use xlink:href="/_slds/icons/utility-sprite/svg/symbols.svg#info" xmlns:xlink="http://www.w3.org/1999/xlink"></use></svg>
+                                        </span>
+                                        <div class="slds-notify__content">
+                                            <h2 class="slds-text-heading_small"></h2>
+                                            <p></p>
+                                        </div>
+                                        <div class="slds-notify__close">
+                                            <button class="slds-button slds-button_icon slds-button_icon-inverse" title="Close">
+                                                <svg aria-hidden="true" class="slds-button__icon slds-button__icon_large"><use xlink:href="/_slds/icons/utility-sprite/svg/symbols.svg#close" xmlns:xlink="http://www.w3.org/1999/xlink"></use></svg>
+                                                <span class="slds-assistive-text">Close</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+<form id="j_id0:j_id29" name="j_id0:j_id29" method="post" action="/MFA_Enabler" class="mfa-form-code" enctype="application/x-www-form-urlencoded">
+<input type="hidden" name="j_id0:j_id29" value="j_id0:j_id29" />
+
+                                
+                                <button aria-hidden="true" disabled="disabled" style="display: none" type="submit"></button>
+
+                                <div class="slds-form-element__control mfa-code-wrap">
+                                    <label for="mfa-code"><abbr class="asterisk" title="required">*</abbr>Verification code</label>
+
+                                    <div aria-label="group" id="otpCode" role="group">
+                                        <input autocomplete="one-time-code" class="slds-input btn-code" id="mfa-code" maxlength="6" placeholder="Enter your 6 digit code" type="tel" />
+                                    </div>
+
+                                    <div class="slds-form-element__help slds-hide" id="mfa-code-error" role="status"></div>
+                                </div>
+                                <input class="slds-button slds-button_brand btn" disabled="disabled" id="verify-code-btn" type="button" value="Continue" />
+<script type="text/javascript" language="Javascript">function dpf(f) {var adp = f.adp;if (adp != null) {for (var i = 0;i < adp.length;i++) {adp[i].parentNode.removeChild(adp[i]);}}};function apf(f, pvp) {var adp = new Array();f.adp = adp;var ps = pvp.split(',');for (var i = 0,ii = 0;i < ps.length;i++,ii++) {var p = document.createElement("input");p.type = "hidden";p.name = ps[i];p.value = ps[i + 1];f.appendChild(p);adp[ii] = p;i += 1;}};function jsfcljs(f, pvp, t) {apf(f, pvp);var ft = f.target;if (t) {f.target = t;}f.submit();f.target = ft;dpf(f);};</script>
+<script>function redirectToHome() { SfdcApp.Visualforce.VSManager.vfPrepareForms(["j_id0:j_id29"]); if(typeof jsfcljs == 'function'){jsfcljs(document.forms['j_id0:j_id29'],'j_id0:j_id29:j_id31,j_id0:j_id29:j_id31','');}return false }</script><div id="j_id0:j_id29:j_id40"></div>
+</form>
+
+                            <div class="slds-text-align--center"><a href="/secur/logout.jsp" class="link-logout">Logout</a>
+                            </div>
+
+                            <div class="help-links">
+                                <p>Code not received? <a href="#" id="send-code-link">Send new code</a></p>
+                                <p class="has-sms-option slds-hide">Want to use another method? <a href="#" id="return-to-options">Go back</a></p>
+                                <p>Having login problems? Visit&nbsp;<a href="https://www.powercor.com.au/contact-us/multi-factor-authentication-mfa/" target="_blank" class="help-link">Help &amp; support</a></p>
+                            </div>
+                        </div>
+                    </main>
+                </div>
+            </div>
+            <div class="slds-col slds-large-size--1-of-2 side-image-col"></div>
+
+            <div class="slds-spinner_container slds-hide">
+                <div class="slds-spinner slds-spinner_large" role="status">
+                    <span class="slds-assistive-text">loading</span>
+                    <div class="slds-spinner__dot-a"></div>
+                    <div class="slds-spinner__dot-b"></div>
+                </div>
+            </div>
+        </div>
+
+        <script type="text/javascript">
+            // IIFE to prevent pollution of global JS scope
+            (function($) {
+                // variables and cache elements
+                const   codeInputPattern = /[0-9]{6}/,
+                        msgEmptyInput = "Please enter your code",
+                        msgInputLengthErr = "Code should be 6 digits",
+                        msgCheckEmail = "Please check your email",
+                        msgCheckSMS = "Please check your SMS messages",
+                        msgCodeResent = "Code re-sent",
+                        $screenOne = $(".screen-one-select"),
+                        $screenTwo = $(".screen-two-code"),
+                        $codeInputWrap = $(".mfa-code-wrap"),
+                        $codeInput = $("#mfa-code"),
+                        $codeError = $("#mfa-code-error"),
+                        $sendCodeBtn = $("#send-code-btn"),
+                        $sendCodeLink = $("#send-code-link"),
+                        $returnToOptions = $("#return-to-options"),
+                        $infoAlert = $(".info-alert"),
+                        $codeForm = $(".mfa-form-code"),
+                        $radioOptions = $("input[type=radio][name=mfa-option-radio]"),
+                        $verifyCodeBtn = $("#verify-code-btn"),
+                        $alertClose = $(".slds-notify__close > button"),
+                        $spinner = $(".slds-spinner_container");
+
+                let usersMFACode, verificationId, isRegistration, errorMsg,
+                    brand = "VPN",
+                    userMobile = "04** *** 000",
+                    hasSMSOption = "true",
+                    optionSelected = "email";
+
+                // event handlers
+                $("[id$=mfa-option]").on("click", function() {
+                    enableSendCodeButton("checkbox");
+                });
+
+                $radioOptions.on("change", function(e) {
+                    optionSelected = e.target.value;
+                    enableSendCodeButton("radio");
+                });
+
+                $codeInput.on("input", function(e) {
+                    // on the fly validation for verification code input
+                    usersMFACode = e.target.value;
+
+                    if (!codeInputPattern.test(usersMFACode) && usersMFACode.length > 0) {
+                        $codeInputWrap.addClass("slds-has-error");
+                        $codeError.text(msgInputLengthErr).removeClass("slds-hide");
+                    } else {
+                        $codeInputWrap.removeClass("slds-has-error");
+                        $codeError.text("").addClass("slds-hide");
+                    }
+
+                    $verifyCodeBtn.prop("disabled", codeInputPattern.test(usersMFACode) ? false : true);
+                });
+
+                $codeInput.on("blur", function(e) {
+                    if (e.target.value.length < 1) {
+                        $codeInputWrap.addClass("slds-has-error");
+                        $codeError.text(msgEmptyInput).removeClass("slds-hide");
+                    }
+                });
+
+                $returnToOptions.on("click", function(e) {
+                    e.preventDefault();
+                    $screenOne.removeClass("slds-hide");
+                    $(".error-alert", $screenOne).addClass("slds-hide");
+                    $(".error-alert", $screenTwo).addClass("slds-hide");
+                    $codeForm.removeClass("slds-hide");
+                    $codeInput.prop("value", "");
+                    $codeInputWrap.removeClass("slds-has-error");
+                    $codeError.addClass('slds-hide');
+                    $sendCodeLink.parent().removeClass("slds-hide");
+                    $(".link-logout", $screenTwo).parent().removeClass("slds-hide");
+                    $screenTwo.addClass("slds-hide");
+                    $sendCodeBtn.prop("disabled", true);
+                    $radioOptions.prop("checked", false);
+                });
+
+                $sendCodeBtn.on("click", function() {
+                   remoteSendCode(true);
+                });
+
+                $sendCodeLink.on("click", function(e) {
+                    e.preventDefault();
+                    remoteSendCode();
+                });
+
+                $verifyCodeBtn.on("click", function() {
+                    verifyCode();
+                });
+
+                $alertClose.on("click", function() {
+                    $(this).parents(".alert-wrap").addClass("slds-hide");
+                });
+
+                const enableSendCodeButton = function(type) {
+                    $sendCodeBtn.prop("disabled", (type === "checkbox") ? !$sendCodeBtn.prop("disabled") : false);
+                };
+
+                const remoteSendCode = function(isOptionsScreen) {
+                    $spinner.removeClass("slds-hide");
+                    $infoAlert.addClass("slds-hide");
+
+                    Visualforce.remoting.Manager.invokeAction(
+                        "MFAEnablerController.initiateMFA",
+                        optionSelected,
+                        function(result, event) {
+                            $spinner.addClass("slds-hide");
+
+                            if (result !== null && result.success) {
+                                // handle success
+                                verificationId = result.verificationIdentifier ? result.verificationIdentifier : null;
+                                isRegistration = result.isRegistration;
+
+                                if (isOptionsScreen) {
+                                    $screenOne.addClass("slds-hide");
+                                    $screenTwo.removeClass("slds-hide");
+                                    
+                                    if (optionSelected === "sms") {
+                                        $(".sms-content").removeClass("slds-hide");
+                                        $(".email-content").addClass("slds-hide");
+                                    } else {
+                                        $(".sms-content").addClass("slds-hide");
+                                        $(".email-content").removeClass("slds-hide");
+                                    }
+                                } else {
+                                    $("h2", $infoAlert).text(msgCodeResent);
+                                    $("p", $infoAlert).text(optionSelected === "sms" ? msgCheckSMS : msgCheckEmail);
+                                    $infoAlert.removeClass("slds-hide");
+                                }
+                            } else {
+                                // handle errors
+                                errorMsg = result.message;
+
+                                if (isOptionsScreen) {
+                                    $(".error-alert h2", $screenOne).text(errorMsg);
+                                    $(".error-alert", $screenOne).removeClass("slds-hide");
+
+                                    if (result.isAccountLocked) {
+                                        $(".mfa-form, .link-logout", $screenOne).addClass("slds-hide");
+                                        $(".logout", $screenOne).removeClass("slds-hide");
+                                    } else {
+                                        $(".mfa-form, .link-logout", $screenOne).removeClass("slds-hide");
+                                        $(".logout", $screenOne).addClass("slds-hide");
+                                        $sendCodeBtn.prop("disabled", true);
+                                        $radioOptions.prop("checked", false);
+                                    }
+                                } else {
+                                    $(".error-alert h2", $screenTwo).text(errorMsg);
+                                    $(".error-alert", $screenTwo).removeClass("slds-hide");
+                                    $codeForm.addClass("slds-hide");
+                                    $(".link-logout", $screenTwo).parent().addClass("slds-hide");
+
+                                    if (result.isAccountLocked || result.isSMSLocked || result.isEmailLocked) {
+                                        $sendCodeLink.parent().addClass("slds-hide");
+                                    } else {
+                                        $sendCodeLink.parent().removeClass("slds-hide");
+                                    }
+
+                                    if (result.isAccountLocked) {
+                                        $returnToOptions.parent().addClass("slds-hide");
+                                    } else {
+                                        $returnToOptions.parent().removeClass("slds-hide");
+                                    }
+                                }
+                            }
+
+                            setTimeout(function() {
+                                $("#otpCode input").val("");
+                                $codeInput.focus();
+                            }, 250);
+                        }, {
+                            escape: true
+                        }
+                    );
+                };
+
+                const verifyCode = function() {
+                    $spinner.removeClass("slds-hide");
+                    $infoAlert.addClass("slds-hide");
+
+                    Visualforce.remoting.Manager.invokeAction(
+                        "MFAEnablerController.verifyMFA",
+                        usersMFACode.substring(0, 6),
+                        verificationId,
+                        isRegistration,
+                        optionSelected,
+                        function(result, event) {
+                            if (result !== null && result.success) {
+                                // handle success
+
+                                // redirect user to dashboard
+                                redirectToHome();
+                            } else {
+                                $spinner.addClass("slds-hide");
+
+                                // handle errors
+                                $codeInputWrap.addClass("slds-has-error");
+                                $codeError.text(result.message).removeClass("slds-hide");
+                            }
+                        }, {
+                            escape: true
+                        }
+                    );
+                };
+
+                // on page load (when document is ready)
+                $(function() {
+                    if (hasSMSOption === "true") {
+                        $(".has-sms-option").removeClass("slds-hide");
+                        $(".select-checkbox-option, .email-only").addClass("slds-hide");
+                    }
+
+                    if (hasSMSOption === "true" && userMobile.length < 1) {
+                        $(".sms-option input").prop("disabled", true);
+                        $(".sms-option .slds-form-element__label").text("SMS not available - mobile number not registered");
+                    }
+
+                    // add brand to body class for brand styling 
+                    $("body").addClass(`brand-${brand}`);
+                    
+                    // reset checkbox when user reopens a closed tab
+                    setTimeout(() => {
+                        $(".select-checkbox-option input").prop("checked", false);
+                    }, 50);
+
+                    if (brand.toLowerCase() === "ue") {
+                        $(".help-link").attr("href", "https://www.unitedenergy.com.au/help-support/online-services/multi-factor-authentication-mfa/");
+                    }
+                });
+            })(jQuery);
+        </script>
+    </body><script type="text/javascript">Sfdc.onReady(function(){
+	SfdcApp && SfdcApp.Visualforce && SfdcApp.Visualforce.VSManager && SfdcApp.Visualforce.VSManager.vfPrepareForms(["j_id0:j_id29","j_id0:j_id9"]);
+
+});</script></html>
