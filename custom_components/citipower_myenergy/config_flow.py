@@ -21,7 +21,6 @@ from homeassistant.config_entries import (
 )
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
 from homeassistant.core import callback
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
@@ -67,6 +66,7 @@ from .exceptions import (
     MyEnergyInvalidCode,
 )
 from .models import NmiInfo
+from .tls import async_create_session
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -113,7 +113,7 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
         """Collect the email and password."""
         errors: dict[str, str] = {}
         if user_input is not None:
-            self._login = MyEnergyLogin(async_create_clientsession(self.hass))
+            self._login = MyEnergyLogin(await async_create_session(self.hass))
             try:
                 page = await self._login.async_submit_credentials(
                     user_input[CONF_EMAIL], user_input[CONF_PASSWORD]

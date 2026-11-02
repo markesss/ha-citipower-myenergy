@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.aiohttp_client import async_create_clientsession
 
 from .api import MyEnergyApi
 from .aura import MyEnergyAuraClient
@@ -17,6 +16,7 @@ from .const import (
 )
 from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
 from .session_store import SessionStore
+from .tls import async_create_session
 
 PLATFORMS: list[Platform] = [Platform.SENSOR]
 
@@ -37,7 +37,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> 
 
     # A dedicated session keeps the portal's cookies out of the shared jar.
     client = MyEnergyAuraClient(
-        async_create_clientsession(hass),
+        await async_create_session(hass),
         store.cookies(entry.entry_id, signed_in_at) or entry.data[CONF_COOKIES],
         context=store.context(entry.entry_id, signed_in_at),
         on_change=_remember,
