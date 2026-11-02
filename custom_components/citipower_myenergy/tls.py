@@ -20,7 +20,9 @@ from homeassistant.core import HomeAssistant
 
 # Valid until 2031-03-29. If DigiCert rotates it, sign-in fails with the same
 # "unable to get local issuer certificate" message; replace this file.
-INTERMEDIATE_PEM = Path(__file__).parent / "certs" / "digicert_global_g2_tls_rsa_sha256_2020_ca1.pem"
+INTERMEDIATE_PEM = (
+    Path(__file__).parent / "certs" / "digicert_global_g2_tls_rsa_sha256_2020_ca1.pem"
+)
 
 _CONNECTOR_KEY = "citipower_myenergy_connector"
 
