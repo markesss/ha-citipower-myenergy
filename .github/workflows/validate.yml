@@ -18,6 +18,9 @@ jobs:
 
   hacs:
     name: HACS
+    # hacs/action looks the repo up via the GitHub API with github_token; on Gitea
+    # that is a Gitea token, so it fails with "Bad credentials". Only run on GitHub.
+    if: github.server_url == 'https://github.com'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
