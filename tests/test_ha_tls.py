@@ -38,6 +38,10 @@ async def test_sessions_share_a_connector_but_not_cookies(hass) -> None:
     second = await async_create_session(hass)
     assert first.connector is second.connector
     assert first.cookie_jar is not second.cookie_jar
+    # A session drops its connector reference on close, so keep ours.
+    connector = first.connector
     await first.close()
     await second.close()
-    await first.connector.close()
+    # Closing a session must not close the connector the others still use.
+    assert not connector.closed
+    await connector.close()
