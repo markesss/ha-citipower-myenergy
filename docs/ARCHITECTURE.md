@@ -6,7 +6,7 @@
                 ┌──────────────────────────────────────────────────┐
  Home Assistant │ config_flow.py   coordinator.py   sensor.py      │
                 │ __init__.py      statistics.py    diagnostics.py │
-                │ session_store.py                                 │
+                │ session_store.py   tls.py                        │
                 └───────────────┬──────────────────────────────────┘
                                 │
  aiohttp        ┌───────────────▼──────────────────────────────────┐
@@ -19,6 +19,12 @@
                 │ const.py                                         │
                 └──────────────────────────────────────────────────┘
 ```
+
+`tls.py` creates every HTTP session the integration uses (config flow and runtime).
+The portal omits its TLS intermediate certificate, so the session's trust store is
+certifi plus the DigiCert intermediate in `certs/`; see *TLS* in
+`PORTAL_PROTOCOL.md`. Do not use `async_create_clientsession` for portal traffic.
+Sessions share one connector (and so one SSL context) but have separate cookie jars.
 
 The bottom layer has no I/O and no HA imports, and is fully unit-tested against
 real (anonymised) portal responses.

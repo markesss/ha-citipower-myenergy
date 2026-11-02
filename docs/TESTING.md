@@ -13,6 +13,7 @@ pytest -q
 | `tests/test_nem12.py` | no | NEM12 parsing, hourly roll-up, units, 400 records, models, chunking |
 | `tests/test_ha_config_flow.py` | yes | full flow, bad password, bad code + retry, resend, NMI choice, reauth |
 | `tests/test_ha_statistics.py` | yes | first import, append-only, repair on change, separate export stat |
+| `tests/test_ha_tls.py` | yes | SSL context trusts the shipped intermediate and still verifies; sessions share a connector, not cookies |
 
 Without `pytest-homeassistant-custom-component` installed, `test_ha_*` are skipped
 (see `tests/conftest.py`).
@@ -61,6 +62,12 @@ logger:
   logs:
     custom_components.citipower_myenergy: debug
 ```
+
+If the config flow says "Could not reach myEnergy", look for the warning
+`Could not reach myEnergy: …` in the HA log. It carries the transport error. A
+`CERTIFICATE_VERIFY_FAILED` means the shipped intermediate no longer matches the portal's
+chain (see *TLS* in `PORTAL_PROTOCOL.md`). Reading the log without UI access: the core log is at
+`/api/hassio/core/logs` on a Supervisor install.
 
 Things to watch in the log during sign-in:
 

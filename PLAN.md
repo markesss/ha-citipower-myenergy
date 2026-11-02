@@ -50,14 +50,18 @@ first unchecked box.
 - [x] HA tests written (`test_ha_config_flow.py`, `test_ha_statistics.py`), **not yet run**
 - [x] README, CLAUDE.md, docs/
 
-**Build complete.** Nothing below has been done yet.
+**Build complete.** Phases 2–3 were started on 2 Nov 2026; see the notes under each item.
 
 ---
 
 ## Phase 2: Automated tests with Home Assistant
 
-- [ ] Create a Python 3.13 venv; `pip install -r requirements-dev.txt`.
-- [ ] `pytest -q`: get all tests passing, including `test_ha_*`.
+- [x] Create a Python 3.13 venv; `pip install -r requirements-dev.txt`.
+      (Done in CI. Not run locally: the development machine has Python 3.11 and no HA.)
+- [x] `pytest -q`: get all tests passing, including `test_ha_*`.
+      CI (Gitea) ran 42 tests: the 41 existing ones passed first time. The one failure was
+      a bug in the new `test_ha_tls.py` (a session's `.connector` is `None` after
+      `close()`), fixed in `c42d4ec`.
       Likely trouble spots: `MockConfigEntry.start_reauth_flow`, `_get_reauth_entry`,
       `_abort_if_unique_id_mismatch` (need HA ≥ 2024.11, so these should exist),
       `AddConfigEntryEntitiesCallback` (HA ≥ 2025.3), and `StatisticMetaData` fields
@@ -72,26 +76,44 @@ first unchecked box.
       round-trips cookies/context and ignores records from a different `signed_in_at`.
 - [ ] Add an `auth.py` test against a fake portal (`aiohttp.web` test server, or
       patch `const` URLs) that replays the fixtures through the full sign-in.
-- [ ] Run hassfest and HACS validation locally or via CI and fix anything they report
+- [x] Run hassfest and HACS validation locally or via CI and fix anything they report
       (manifest key order, strings, missing brand assets: `ignore: brands` is set).
+      hassfest passes on both Gitea and GitHub. `hacs/action` cannot run on Gitea (it calls
+      the GitHub API with the runner token: "Bad credentials"), so the job is skipped
+      unless `github.server_url` is github.com. On GitHub it needed a repo description,
+      topics, and a `LICENSE` GitHub can identify as MIT (a free-text "Portions adapted"
+      line broke detection; the ha-yvw copyright is now its own line). Green after that.
 
 ## Phase 3: Live test in Home Assistant
 
 Use a dev instance where possible (e.g. Docker `homeassistant/home-assistant:2025.12`).
 Turn on debug logging first (see docs/TESTING.md). Note the result of each step here.
 
-- [ ] Install: copy `custom_components/citipower_myenergy` into `config/custom_components/`, restart.
-- [ ] Add integration → email/password accepted → **method** step shows
+- [x] Install: copy `custom_components/citipower_myenergy` into `config/custom_components/`, restart.
+      Installed through HACS as a custom repository. HACS needs a **GitHub Release**
+      (not just a commit): with none, it tried `archive/refs/heads/<sha>.zip` and got a 404.
+- [x] Add integration → email/password accepted → **method** step shows
       "SMS to 04** *** nnn" and "Email to …".
-      *If this fails:* the login page assumption (CLAUDE.md #1) is wrong. Capture
-      the `/s/login/` HTML response and fix `async_load_page_context` / `auth.py`.
-- [ ] Choose SMS → code arrives → **code** step accepts it → entry created.
+      The login page assumption (CLAUDE.md #1) held: a scripted run of
+      `async_submit_credentials` from a PC reached the portal's rejection of a bogus login.
+      **Finding: the portal serves an incomplete TLS chain.** It sends only its leaf
+      certificate, not the DigiCert intermediate ("DigiCert Global G2 TLS RSA SHA256 2020
+      CA1"). Browsers and Windows fetch the intermediate on demand; Python/OpenSSL on Linux
+      does not, so HA reported "Could not reach myEnergy" with
+      `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate`. Fixed in v0.1.2
+      by shipping the public intermediate (`certs/`) and building the sessions' trust
+      store from certifi plus it (`tls.py`); verification stays on. The intermediate expires
+      2031-03-29. The cause was invisible because the config flow swallowed the
+      exception text; `cannot_connect` is now logged.
+- [x] Choose SMS → code arrives → **code** step accepts it → entry created.
+      Reported working. Which method (SMS or email) was used was not recorded.
 - [ ] Repeat with **email** as the method.
 - [ ] Deliberately enter a **wrong password**. Capture the debug-logged
       response shape and make `portal.login_error` read it. Add a fixture and test.
 - [ ] Deliberately enter a **wrong code**. Confirm the portal's message is shown and a
       second attempt (or resend) works. Add a fixture and test.
-- [ ] First refresh: backfill completes (≈7 requests). Note how long it takes.
+- [~] First refresh: backfill completes (≈7 requests). Note how long it takes.
+      Reported: data pulled in. Duration and statistic ids not recorded yet.
       Developer tools → Statistics shows `citipower_myenergy:<nmi>_e1` from
       the account's start date.
 - [ ] Compare a few days' totals in HA with the myEnergy usage page.
@@ -128,11 +150,15 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
 
 ## Phase 6: Publish
 
-- [ ] Create the GitHub repo; replace `OWNER` in `manifest.json`
+- [~] Create the GitHub repo; replace `OWNER` in `manifest.json`
       (`documentation`, `issue_tracker`) and add `codeowners`.
-- [ ] CI green (hassfest, HACS, ruff, pytest).
+      Repo `markesss/ha-citipower-myenergy` created (a push mirror of the Gitea repo),
+      `OWNER` replaced. `codeowners` is still empty.
+- [x] CI green (hassfest, HACS, ruff, pytest).
 - [ ] Update README with live-test results and anything learnt in Phases 3–5.
-- [ ] Bump `version` in `manifest.json`; tag a `v0.1.0` release.
+- [x] Bump `version` in `manifest.json`; tag a `v0.1.0` release.
+      Now at v0.1.2 (v0.1.1 added the connection-error logging, v0.1.2 the TLS fix). Each
+      tag also needs a GitHub Release for HACS.
 - [ ] Optional: post on the HA community forum (thread "Reading Australian
       smart meter data" has people asking for exactly this).
 

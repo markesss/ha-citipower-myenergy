@@ -11,11 +11,10 @@ long-term statistics for the Energy dashboard. The design copies
 [gheydon/ha-yvw](https://github.com/gheydon/ha-yvw), which does the same for
 Yarra Valley Water on the same Salesforce Experience Cloud platform.
 
-**Current state:** the build is complete. The code was written and the pure
-parsers tested in a sandbox *without* Home Assistant or aiohttp installed. The
-HA-level code (config flow, coordinator, statistics, sensors) and the live
-sign-in have **never been run**. Finishing that work is the job; follow
-[`PLAN.md`](PLAN.md).
+**Current state:** the build is complete and has been installed in a live Home
+Assistant (v0.1.2): sign-in with MFA works and data is imported. Still to verify
+are the statistics against the portal, the Energy dashboard, session lifetime
+and the edge cases in [`PLAN.md`](PLAN.md); follow it.
 
 ## Start here
 
@@ -52,6 +51,7 @@ custom_components/citipower_myenergy/
   api.py            MyEnergyApi: list NMIs, account info, meter data, session clock
   statistics.py     HA recorder: external statistics with repair-on-change
   session_store.py  HA Store: cookies + Aura context across restarts
+  tls.py            HTTP sessions with the portal's missing TLS intermediate (certs/)
   coordinator.py    DataUpdateCoordinator + keep-alive loop + reauth trigger
   config_flow.py    user → method (email/SMS) → code → nmi; reauth; options
   sensor.py         latest data, latest-day kWh per channel, session status
@@ -80,6 +80,9 @@ tests/
   `const.MARKET_TZ`, never `Australia/Melbourne`, for interval timestamps.
 - **The statistics running sum must never double-count.** Any change to
   `statistics.py` needs a test in `test_ha_statistics.py`.
+- **All portal traffic goes through `tls.async_create_session`.** The portal omits its
+  TLS intermediate certificate, so HA's own client session fails verification. Never
+  disable verification to work around it.
 - Mirror the browser. When the portal does something odd (literal `"null"`
   CSRF token on the login page, `.VPN` username suffix, `jsfcljs` form
   fields), copy it exactly and leave a comment saying why.
@@ -92,9 +95,9 @@ tests/
 These are the most likely causes of a first-run failure. Each one has a
 `PLAN.md` item:
 
-1. The login page (`/s/login/`) HTML was not captured. `auth.py` assumes it
-   carries an Aura descriptor like the signed-in pages, with no `eikoocnekot`
-   (so `aura.token` is the literal `"null"`, which is what the browser sent).
+1. ~~The login page HTML was not captured.~~ **Confirmed working** (live sign-in
+   and a scripted login attempt): the page carries an Aura descriptor and no
+   `eikoocnekot`, so `aura.token` is the literal `"null"`.
 2. The response to a **wrong password** has not been seen. `portal.login_error`
    guesses at `errorMessage`/`message` keys.
 3. The response to a **wrong code** has not been seen. The page script reads

@@ -8,6 +8,21 @@ Host: `https://myenergy.powercor.com.au`. Salesforce Experience Cloud site
 (app `siteforce:communityApp`), shared with United Energy (brand `UE`).
 CitiPower/Powercor brand is `VPN`.
 
+## TLS
+
+The server presents only its leaf certificate (issued by "DigiCert Global G2 TLS RSA
+SHA256 2020 CA1", itself issued by "DigiCert Global Root G2") and **does not send the
+intermediate**. Browsers and Windows fetch it from the certificate's AIA URL; OpenSSL on
+Linux does not, and fails with `unable to get local issuer certificate`. Check with
+`openssl s_client -connect myenergy.powercor.com.au:443 -servername myenergy.powercor.com.au`
+("unable to verify the first certificate").
+
+The integration ships the intermediate
+(`custom_components/citipower_myenergy/certs/digicert_global_g2_tls_rsa_sha256_2020_ca1.pem`,
+from `https://cacerts.digicert.com/DigiCertGlobalG2TLSRSASHA2562020CA1-1.crt`, valid to
+2031-03-29) and adds it to certifi's roots. Verification stays on. If DigiCert rotates the
+intermediate, replace the file; the symptom is the same error.
+
 ## Aura requests
 
 `POST /s/sfsites/aura?r=<n>&aura.ApexAction.execute=1`, form-encoded:
@@ -37,7 +52,9 @@ CitiPower/Powercor brand is `VPN`.
    `{"username": "<email>.VPN", "password": "…", "startUrl": "/s/"}`,
    pageURI `/s/login/?ec=302&startURL=%2Fs%2F`.
    Success: `returnValue.returnValue = {"data":{"loginUrl":"https://…/secur/frontdoor.jsp?allp=1&appkp=1&apv=1&cshc=…&refURL=…&retURL=%2Fs%2F&sid=<SESSION>&untethered="},"isSuccess":true}`.
-   **Failure shape not yet captured.**
+   **Failure shape not yet captured.** A bogus username/password from a script gives
+   `MyEnergyInvalidAuth` with the generic fallback message, so `login_error` found no
+   `errorMessage`/`message` key; the real body has not been looked at.
    No reCAPTCHA token is sent, even though `api.js?render=<key>` loads on the page.
 3. `GET frontdoor.jsp…`: HTML whose script does
    `window.location.replace("https://…/apex/MFA_Enabler?retURL=%2Fs%2F")`.
