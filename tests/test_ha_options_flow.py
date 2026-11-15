@@ -17,6 +17,7 @@ from custom_components.citipower_myenergy.const import (
     CONF_COOKIES,
     CONF_KEEPALIVE_MINUTES,
     CONF_NMI,
+    CONF_PERIOD_STATS,
     CONF_SIGNED_IN_AT,
     CONF_TARIFF,
     DOMAIN,
@@ -544,3 +545,90 @@ async def test_an_invalid_stored_tariff_offers_a_fresh_start(
     result = await open_tariff_menu(hass, entry)
     assert result["menu_options"] == ["tariff_setup", "tariff_advanced"]
     assert "not valid" in result["description_placeholders"]["summary"]
+
+
+# --- Statistics per tariff period ---------------------------------------------------------------
+
+
+async def test_period_statistics_is_not_offered_without_a_tariff(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    result = await open_tariff_menu(hass, make_entry(hass))
+    assert "tariff_period_stats" not in result["menu_options"]
+
+
+async def test_period_statistics_is_offered_with_a_tariff(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass, {CONF_TARIFF: stored(glohome_version())})
+    result = await open_tariff_menu(hass, entry)
+    assert "tariff_period_stats" in result["menu_options"]
+
+
+async def test_period_statistics_step_shows_the_adjustment_and_the_ids(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass, {CONF_TARIFF: stored(glohome_version())})
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_period_stats")
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "tariff_period_stats"
+    details = result["description_placeholders"]["details"]
+    assert f"{hass.config.currency} 0.89628" in details
+    for slug in ("peak", "off_peak", "shoulder"):
+        assert f"citipower_myenergy:{NMI}_e1_{slug}`" in details
+        assert f"citipower_myenergy:{NMI}_e1_{slug}_cost`" in details
+    # Off until the user turns it on.
+    (marker,) = result["data_schema"].schema
+    assert marker.default() is False
+
+
+async def test_period_statistics_can_be_turned_on_and_off_keeping_the_other_options(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass, {CONF_KEEPALIVE_MINUTES: 25, CONF_TARIFF: stored(glohome_version())})
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_period_stats")
+    result = await go(hass, result, {"enabled": True})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_PERIOD_STATS] is True
+    assert entry.options[CONF_KEEPALIVE_MINUTES] == 25
+    assert entry.options[CONF_TARIFF] == stored(glohome_version())
+
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_period_stats")
+    (marker,) = result["data_schema"].schema
+    assert marker.default() is True  # remembers the current choice
+    result = await go(hass, result, {"enabled": False})
+    assert entry.options[CONF_PERIOD_STATS] is False
+    assert entry.options[CONF_TARIFF] == stored(glohome_version())
+
+
+async def test_the_keepalive_step_keeps_the_period_statistics_option(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass, {CONF_PERIOD_STATS: True, CONF_TARIFF: stored(glohome_version())})
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await pick(hass, result, "keepalive")
+    result = await go(hass, result, {CONF_KEEPALIVE_MINUTES: 30})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_PERIOD_STATS] is True
+    assert entry.options[CONF_KEEPALIVE_MINUTES] == 30
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+async def test_recalculate_rewrites_period_statistics_only_when_the_option_is_on(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    custom_integration,
+    hass_storage,
+    enabled: bool,
+) -> None:
+    entry = make_entry(hass, {CONF_TARIFF: stored(glohome_version()), CONF_PERIOD_STATS: enabled})
+    await SessionStore(hass).async_save_suffixes(entry.entry_id, ["E1"])
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_recalculate")
+    recalc = AsyncMock(return_value=24)
+    with patch("custom_components.citipower_myenergy.tariff_flow.async_recalculate_costs", recalc):
+        await go(hass, result, {"from_date": "2026-11-01"})
+    assert recalc.await_args.kwargs == {"period_statistics": enabled}

@@ -35,10 +35,17 @@ from homeassistant.helpers.selector import (
 from homeassistant.util import dt as dt_util
 
 from . import tariff_form as form
-from .const import CONF_ADDRESS, CONF_DESCRIPTION, CONF_NMI, CONF_TARIFF, MARKET_TZ
+from .const import (
+    CONF_ADDRESS,
+    CONF_DESCRIPTION,
+    CONF_NMI,
+    CONF_PERIOD_STATS,
+    CONF_TARIFF,
+    MARKET_TZ,
+)
 from .exceptions import MyEnergyError, TariffError
 from .session_store import SessionStore
-from .statistics import async_recalculate_costs
+from .statistics import async_recalculate_costs, period_statistic_ids
 from .tariff import KIND_EXPORT, KIND_IMPORT, Tariff, flat_tariff
 
 _LOGGER = logging.getLogger(__name__)
@@ -130,6 +137,7 @@ class TariffOptionsFlow(OptionsFlow):
                 "tariff_edit_latest",
                 "tariff_add_version",
                 "tariff_recalculate",
+                "tariff_period_stats",
                 "tariff_advanced",
                 "tariff_remove",
             ]
@@ -526,10 +534,17 @@ class TariffOptionsFlow(OptionsFlow):
             await store.async_load()
             suffixes = store.suffixes(self.config_entry.entry_id) or ["E1"]
             rows = 0
+            period_statistics = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
             try:
                 for suffix in suffixes:
                     rows += await async_recalculate_costs(
-                        self.hass, data[CONF_NMI], name, suffix, tariff, from_day
+                        self.hass,
+                        data[CONF_NMI],
+                        name,
+                        suffix,
+                        tariff,
+                        from_day,
+                        period_statistics=period_statistics,
                     )
             except (TariffError, MyEnergyError) as err:
                 _LOGGER.warning("Could not recalculate the cost history: %s", err)
@@ -542,3 +557,29 @@ class TariffOptionsFlow(OptionsFlow):
         default = tariff.versions[-1].effective_from.isoformat()
         schema = vol.Schema({vol.Required("from_date", default=default): DateSelector()})
         return self.async_show_form(step_id="tariff_recalculate", data_schema=schema, errors=errors)
+
+    # --- Statistics per tariff period ------------------------------------------------------
+
+    async def async_step_tariff_period_stats(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Turn the per-period statistics on or off (the coloured bars in the Energy dashboard)."""
+        tariff = self._stored_tariff()
+        if tariff is None:
+            return await self.async_step_tariff()
+        if user_input is not None:
+            # Saving reloads the entry, and the first poll after the reload backfills history.
+            options = dict(self.config_entry.options)
+            options[CONF_PERIOD_STATS] = bool(user_input["enabled"])
+            return self.async_create_entry(title="", data=options)
+        nmi = self.config_entry.data[CONF_NMI]
+        details = form.period_statistics_text(
+            tariff, lambda slug: period_statistic_ids(nmi, slug), self.hass.config.currency
+        )
+        current = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
+        schema = vol.Schema({vol.Required("enabled", default=current): BooleanSelector()})
+        return self.async_show_form(
+            step_id="tariff_period_stats",
+            data_schema=schema,
+            description_placeholders={"details": details},
+        )

@@ -299,3 +299,56 @@ def test_every_menu_option_and_step_has_a_label() -> None:
         "period_edit_form",
     ):
         assert steps[step]["data"], step
+
+
+# --- Statistics per tariff period --------------------------------------------------------------
+
+
+def _ids(slug: str) -> tuple[str, str]:
+    return f"stat:{slug}", f"stat:{slug}_cost"
+
+
+def test_period_statistics_text_gives_the_daily_adjustment_and_the_statistics() -> None:
+    tariff = form.build_tariff([glohome()])
+    text = form.period_statistics_text(tariff, _ids, "AUD")
+    # 92.40 c x 0.97 (3% discount, prices already include GST) = $0.89628.
+    assert "AUD 0.89628" in text
+    assert "92.40 c/day supply charge less the 3% discount" in text
+    assert "GST" not in text
+    assert "rates starting 2026-10-28" in text
+    assert "- **Peak**: `stat:peak` and `stat:peak_cost`" in text
+    assert "- **Off-peak**: `stat:off_peak` and `stat:off_peak_cost`" in text
+    assert "- **Shoulder**: `stat:shoulder` and `stat:shoulder_cost`" in text
+    assert "older rates" not in text
+
+
+def test_period_statistics_text_explains_gst_and_a_missing_discount() -> None:
+    version = glohome()
+    version.update(prices_include_gst=False, discount_pct=0.0, supply_c_per_day=100.0)
+    text = form.period_statistics_text(form.build_tariff([version]), _ids, "AUD")
+    assert "AUD 1.10000" in text  # 100 c plus 10% GST
+    assert "100.00 c/day supply charge plus 10% GST" in text
+    assert "discount" not in text
+
+
+def test_period_statistics_text_uses_the_newest_version_and_flags_old_periods() -> None:
+    old = glohome()
+    new = glohome()
+    new.update(effective_from="2026-12-01", supply_c_per_day=110.0, discount_pct=0.0)
+    new["import_periods"] = [form.form_to_period("All day", 20.0, "0-24", None)]
+    text = form.period_statistics_text(form.build_tariff([old, new]), _ids, "AUD")
+    assert "AUD 1.10000" in text  # the 2026-12-01 supply charge, no discount
+    assert "rates starting 2026-12-01" in text
+    assert "- **All day**: `stat:all_day`" in text
+    assert "- **Peak** _(only in older rates, so zero from now on)_: `stat:peak`" in text
+
+
+def test_period_statistics_step_has_its_strings() -> None:
+    steps = _strings()["options"]["step"]
+    step = steps["tariff_period_stats"]
+    assert "{details}" in step["description"]
+    assert step["data"]["enabled"]
+    assert "tariff_period_stats" in steps["tariff"]["menu_options"]
+    # It must warn about the double count and say the adjustment is a fixed number.
+    for phrase in ("twice", "daily cost adjustment", "one grid source only", "fixed number"):
+        assert phrase in step["description"]

@@ -12,7 +12,7 @@ on different days) is left untouched and edited as YAML in the advanced step.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date, datetime
 from typing import Any
 
@@ -26,6 +26,8 @@ from .tariff import (
     TariffVersion,
     Tier,
     Window,
+    daily_supply_dollars,
+    period_slugs,
 )
 
 # The same sentence is repeated, as plain text, in every step description in strings.json
@@ -339,3 +341,37 @@ def draft_problem(versions: Sequence[Mapping[str, Any]]) -> str | None:
     except TariffError as err:
         return str(err)
     return None
+
+
+# --- Statistics per tariff period ------------------------------------------------------------
+
+
+def period_statistics_text(
+    tariff: Tariff, ids_for: Callable[[str], tuple[str, str]], currency: str
+) -> str:
+    """Return the markdown the "statistics per period" step shows: what to enter, what is written.
+
+    ``ids_for`` turns a period slug into its (kWh, cost) statistic ids. The daily cost adjustment
+    is the newest version's supply charge after GST and the discount, exactly what the combined
+    cost statistic puts on each day, so period costs plus this equal the combined cost.
+    """
+    version = tariff.versions[-1]
+    current = {period.name for period in version.import_periods}
+    amount = daily_supply_dollars(version)
+    how = f"{version.supply_c_per_day:.2f} c/day supply charge"
+    if not version.prices_include_gst:
+        how += " plus 10% GST"
+    if version.discount_pct:
+        how += f" less the {version.discount_pct:g}% discount"
+    lines = [
+        f"**Daily cost adjustment to enter: {currency} {amount:.5f}**",
+        "",
+        f"That is your {how}, from the rates starting {version.effective_from.isoformat()}.",
+        "",
+        "Statistics that will be written:",
+    ]
+    for name, slug in period_slugs(tariff, KIND_IMPORT).items():
+        kwh_id, cost_id = ids_for(slug)
+        note = "" if name in current else " _(only in older rates, so zero from now on)_"
+        lines.append(f"- **{name}**{note}: `{kwh_id}` and `{cost_id}`")
+    return "\n".join(lines)
