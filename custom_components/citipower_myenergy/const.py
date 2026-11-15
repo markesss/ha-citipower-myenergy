@@ -92,6 +92,9 @@ CONF_DESCRIPTION = "description"
 CONF_COMPANY = "company"
 CONF_SIGNED_IN_AT = "signed_in_at"
 CONF_KEEPALIVE_MINUTES = "keepalive_minutes"
+# The user's tariff, as Tariff.to_dict() (JSON-safe), in entry.options. Absent means cost
+# tracking is off.
+CONF_TARIFF = "tariff"
 CONF_MFA_METHOD = "mfa_method"
 CONF_CODE = "code"
 CONF_RESEND = "resend"
