@@ -95,6 +95,9 @@ CONF_KEEPALIVE_MINUTES = "keepalive_minutes"
 # The user's tariff, as Tariff.to_dict() (JSON-safe), in entry.options. Absent means cost
 # tracking is off.
 CONF_TARIFF = "tariff"
+# Opt-in (default off): also write a kWh and a cost statistic per import tariff period, so the
+# Energy dashboard can draw each period as its own coloured grid source. Needs a tariff.
+CONF_PERIOD_STATS = "period_statistics"
 CONF_MFA_METHOD = "mfa_method"
 CONF_CODE = "code"
 CONF_RESEND = "resend"

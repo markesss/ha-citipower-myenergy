@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, datetime, time, timedelta
 
 import pytest
@@ -21,8 +22,10 @@ from custom_components.citipower_myenergy.nem12 import Channel
 from custom_components.citipower_myenergy.statistics import (
     async_insert_channel,
     async_insert_cost,
+    async_insert_period_statistics,
     async_recalculate_costs,
     cost_statistic_id_for,
+    period_statistic_ids,
     statistic_id_for,
 )
 from custom_components.citipower_myenergy.tariff import (
@@ -31,6 +34,7 @@ from custom_components.citipower_myenergy.tariff import (
     TariffVersion,
     Tier,
     Window,
+    daily_supply_dollars,
     flat_tariff,
 )
 
@@ -381,3 +385,338 @@ async def test_cost_leaves_the_kwh_statistic_alone(
     kwh_before = await _stored(hass)
     await async_insert_cost(hass, NMI, "Home", channel, _glohome())
     assert await _stored(hass) == kwh_before
+
+
+# --- Per-period statistics ------------------------------------------------------------------
+#
+# The same GLOHOME tariff split by period (slugs peak, off_peak, shoulder), 1 kWh in every
+# hour of two AEST days. Per period, hand-worked (cents x 0.97 / 100):
+#   peak      10 kWh (5 h x 2 days)  cost 10 x 0.305162 = $3.05162
+#   off_peak  28 kWh (14 h x 2 days) cost 28 x 0.16005  = $4.48140
+#   shoulder  10 kWh (5 h x 2 days)  cost 10 x 0.12804  = $1.28040
+# No supply charge in any of them: that is 2 x $0.89628 = $1.79256, so the periods plus supply
+# come to $10.60598 = 2 x DAY_COST, the combined statistic's total.
+
+SLUGS = ("peak", "off_peak", "shoulder")
+PERIOD_KWH = {"peak": 10.0, "off_peak": 28.0, "shoulder": 10.0}
+PERIOD_COST = {"peak": 3.05162, "off_peak": 4.4814, "shoulder": 1.2804}
+SUPPLY_DAY = 0.89628
+
+
+async def _rows_of(hass: HomeAssistant, statistic_id: str) -> list[dict]:
+    await async_wait_recording_done(hass)
+    rows = await hass.async_add_executor_job(
+        statistics_during_period,
+        hass,
+        dt_util.utc_from_timestamp(0),
+        None,
+        {statistic_id},
+        "hour",
+        None,
+        {"state", "sum"},
+    )
+    return rows.get(statistic_id, [])
+
+
+async def _period_rows(hass: HomeAssistant, slugs=SLUGS) -> dict[str, list[dict]]:
+    """Return {statistic id: rows} for every period statistic, kWh and cost."""
+    out = {}
+    for slug in slugs:
+        for statistic_id in period_statistic_ids(NMI, slug):
+            out[statistic_id] = await _rows_of(hass, statistic_id)
+    return out
+
+
+def _pair(rows: dict[str, list[dict]], slug: str) -> tuple[list[dict], list[dict]]:
+    kwh_id, cost_id = period_statistic_ids(NMI, slug)
+    return rows[kwh_id], rows[cost_id]
+
+
+def test_period_statistic_ids() -> None:
+    assert period_statistic_ids("61020000001", "peak") == (
+        "citipower_myenergy:61020000001_e1_peak",
+        "citipower_myenergy:61020000001_e1_peak_cost",
+    )
+
+
+async def test_period_first_import_splits_kwh_and_cost_by_period(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([1.0] * 48)
+    assert await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome()) == 48
+    rows = await _period_rows(hass)
+    for slug in SLUGS:
+        kwh, cost = _pair(rows, slug)
+        assert len(kwh) == len(cost) == 48  # a row for every hour
+        assert kwh[-1]["sum"] == pytest.approx(PERIOD_KWH[slug], abs=1e-6)
+        assert cost[-1]["sum"] == pytest.approx(PERIOD_COST[slug], abs=1e-6)
+        _assert_consistent(kwh)
+        _assert_consistent(cost)
+    # Hour by hour: 17:00 is peak only, 12:00 shoulder only, midnight off-peak only.
+    peak_kwh, peak_cost = _pair(rows, "peak")
+    assert (peak_kwh[17]["state"], peak_cost[17]["state"]) == (1.0, pytest.approx(PEAK))
+    assert (peak_kwh[12]["state"], peak_cost[12]["state"]) == (0.0, 0.0)
+    off_kwh, off_cost = _pair(rows, "off_peak")
+    assert (off_kwh[0]["state"], off_cost[0]["state"]) == (1.0, pytest.approx(OFFPEAK))
+    # The supply charge is in no period's cost: midnight is plain off-peak here.
+    assert off_cost[0]["state"] < MIDNIGHT
+
+
+async def test_period_statistics_carry_names_unit_and_currency(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    hass.config.currency = "AUD"
+    await async_insert_period_statistics(hass, NMI, "Home", _channel([1.0] * 24), _glohome())
+    await async_wait_recording_done(hass)
+    listed = {
+        item["statistic_id"]: item
+        for item in await hass.async_add_executor_job(list_statistic_ids, hass)
+    }
+    kwh_id, cost_id = period_statistic_ids(NMI, "off_peak")
+    assert listed[kwh_id]["name"] == "Home grid import Off-peak"
+    assert listed[kwh_id]["statistics_unit_of_measurement"] == "kWh"
+    assert listed[kwh_id]["unit_class"] == "energy"
+    assert listed[cost_id]["name"] == "Home grid import Off-peak cost"
+    assert listed[cost_id]["statistics_unit_of_measurement"] == "AUD"
+    assert listed[cost_id]["has_sum"] is True
+    assert listed[cost_id]["unit_class"] is None
+
+
+async def test_period_incremental_import_adds_only_new_days(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    await async_insert_period_statistics(hass, NMI, "Home", _channel([1.0] * 24), _glohome())
+    await async_wait_recording_done(hass)
+    added = await async_insert_period_statistics(
+        hass, NMI, "Home", _channel([1.0] * 48), _glohome()
+    )
+    assert added == 24
+    rows = await _period_rows(hass)
+    for slug in SLUGS:
+        kwh, cost = _pair(rows, slug)
+        assert len(kwh) == len(cost) == 48
+        assert cost[-1]["sum"] == pytest.approx(PERIOD_COST[slug], abs=1e-6)
+        _assert_consistent(cost)
+
+
+async def test_period_rerun_changes_nothing(recorder_mock: Recorder, hass: HomeAssistant) -> None:
+    channel = _channel([1.0] * 48)
+    await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome())
+    before = await _period_rows(hass)
+    assert await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome()) == 0
+    assert await _period_rows(hass) == before
+
+
+async def test_period_corrected_reading_rewrites_every_period_without_double_counting(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    await async_insert_period_statistics(hass, NMI, "Home", _channel([1.0] * 48), _glohome())
+    await async_wait_recording_done(hass)
+
+    values = [1.0] * 48
+    values[12] = 3.0  # 12:00 on day one is a shoulder hour: two extra kWh
+    channel = _channel(values)
+    written = await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome())
+    assert written == 48  # all of day one is rewritten, then day two
+    rows = await _period_rows(hass)
+    for slug in SLUGS:
+        kwh, cost = _pair(rows, slug)
+        assert len(kwh) == len(cost) == 48  # rewritten in place, not appended
+        _assert_consistent(kwh)
+        _assert_consistent(cost)
+    shoulder_kwh, shoulder_cost = _pair(rows, "shoulder")
+    assert shoulder_kwh[12]["state"] == 3.0
+    assert shoulder_kwh[-1]["sum"] == pytest.approx(PERIOD_KWH["shoulder"] + 2, abs=1e-6)
+    assert shoulder_cost[-1]["sum"] == pytest.approx(
+        PERIOD_COST["shoulder"] + 2 * SHOULDER, abs=1e-6
+    )
+    # The other periods hold what they held: only the shoulder changed value.
+    off_kwh, _ = _pair(rows, "off_peak")
+    assert off_kwh[-1]["sum"] == pytest.approx(PERIOD_KWH["off_peak"], abs=1e-6)
+
+
+async def test_period_correction_on_day_two_leaves_day_one_alone(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    await async_insert_period_statistics(hass, NMI, "Home", _channel([1.0] * 48), _glohome())
+    before = await _period_rows(hass)
+    values = [1.0] * 48
+    values[24 + 17] = 2.0  # 17:00 on day two, a peak hour
+    channel = _channel(values)
+    assert await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome()) == 24
+    rows = await _period_rows(hass)
+    for statistic_id, stored in rows.items():
+        assert stored[:24] == before[statistic_id][:24]
+    _, peak_cost = _pair(rows, "peak")
+    assert peak_cost[-1]["sum"] == pytest.approx(PERIOD_COST["peak"] + PEAK, abs=1e-6)
+
+
+async def test_period_versions_with_different_periods_write_zero_for_the_missing_ones(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Day one is flat; day two is the three-period plan. Every statistic still has 48 rows."""
+    old = flat_tariff(20.0, effective_from=D0).versions[0]  # one period, "All day"
+    new = replace(_glohome().versions[0], effective_from=date(2026, 10, 21))  # day two onwards
+    tariff = Tariff((old, new))
+    channel = _channel([1.0] * 48)
+    assert await async_insert_period_statistics(hass, NMI, "Home", channel, tariff) == 48
+    every = ("all_day", *SLUGS)
+    rows = await _period_rows(hass, every)
+    all_kwh, all_cost = _pair(rows, "all_day")
+    assert len(all_kwh) == 48
+    assert [row["state"] for row in all_kwh[:24]] == [1.0] * 24  # day one: everything
+    assert [row["state"] for row in all_kwh[24:]] == [0.0] * 24  # day two: nothing
+    assert all_cost[23]["sum"] == pytest.approx(24 * 0.20, abs=1e-6)
+    assert all_cost[-1]["sum"] == pytest.approx(24 * 0.20, abs=1e-6)  # flat for day one only
+    for slug in SLUGS:
+        kwh, cost = _pair(rows, slug)
+        assert [row["state"] for row in kwh[:24]] == [0.0] * 24  # absent on day one
+        assert kwh[-1]["sum"] == pytest.approx(PERIOD_KWH[slug] / 2, abs=1e-6)  # day two only
+        assert cost[-1]["sum"] == pytest.approx(PERIOD_COST[slug] / 2, abs=1e-6)
+    # Nothing is lost: each hour's kWh lands in exactly one period.
+    for hour in range(48):
+        assert sum(_pair(rows, slug)[0][hour]["state"] for slug in every) == 1.0
+
+
+async def test_period_adding_a_period_backfills_its_history_and_orphans_the_old_one(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    await async_insert_channel(hass, NMI, "Home", _channel([1.0] * 48))
+    await async_insert_period_statistics(hass, NMI, "Home", _channel([1.0] * 48), _glohome())
+    await async_wait_recording_done(hass)
+    old_off_peak = await _period_rows(hass, ("off_peak",))
+
+    renamed = Tariff(
+        (
+            TariffVersion(
+                effective_from=D0,
+                supply_c_per_day=92.40,
+                discount_pct=3.0,
+                import_periods=(
+                    Period("Peak", (Window(16, 21),), (Tier(None, 31.46),)),
+                    Period("Night", (Window(21, 11),), (Tier(None, 16.50),)),  # was Off-peak
+                    Period("Shoulder", (Window(11, 16),), (Tier(None, 13.20),)),
+                ),
+            ),
+        )
+    )
+    # A poll that only carries the last day: the new "night" statistic is filled from the
+    # stored kWh history anyway, and the others are rewritten together with it.
+    recent = _channel([1.0] * 24, start=START + timedelta(days=1))
+    assert await async_insert_period_statistics(hass, NMI, "Home", recent, renamed) == 48
+    rows = await _period_rows(hass, ("night", "peak", "shoulder"))
+    night_kwh, night_cost = _pair(rows, "night")
+    assert len(night_kwh) == len(night_cost) == 48
+    assert night_kwh[-1]["sum"] == pytest.approx(PERIOD_KWH["off_peak"], abs=1e-6)
+    assert night_cost[-1]["sum"] == pytest.approx(PERIOD_COST["off_peak"], abs=1e-6)
+    _assert_consistent(night_cost)
+    # The renamed-away statistic is left alone: not deleted and not written to.
+    assert await _period_rows(hass, ("off_peak",)) == old_off_peak
+
+
+async def test_period_split_agrees_with_the_combined_statistics(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Periods' cost sums plus the supply charge equal the combined cost, per hour and in total."""
+    values = [((i * 7) % 11) / 3 for i in range(96)]  # four days of uneven usage
+    channel = _channel(values)
+    await async_insert_channel(hass, NMI, "Home", channel)
+    await async_insert_cost(hass, NMI, "Home", channel, _glohome())
+    await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome())
+    rows = await _period_rows(hass)
+    combined_cost = await _stored_cost(hass)
+    combined_kwh = await _stored(hass)
+
+    days = 4
+    period_cost_total = sum(_pair(rows, slug)[1][-1]["sum"] for slug in SLUGS)
+    assert period_cost_total + days * SUPPLY_DAY == pytest.approx(
+        combined_cost[-1]["sum"], abs=1e-4
+    )
+    period_kwh_total = sum(_pair(rows, slug)[0][-1]["sum"] for slug in SLUGS)
+    assert period_kwh_total == pytest.approx(combined_kwh[-1]["sum"], abs=1e-4)
+
+    for hour in range(96):
+        supply = SUPPLY_DAY if hour % 24 == 0 else 0.0
+        periods = sum(_pair(rows, slug)[1][hour]["state"] for slug in SLUGS)
+        assert periods + supply == pytest.approx(combined_cost[hour]["state"], abs=2e-6)
+        kwh = sum(_pair(rows, slug)[0][hour]["state"] for slug in SLUGS)
+        assert kwh == pytest.approx(combined_kwh[hour]["state"], abs=1e-6)
+    assert daily_supply_dollars(_glohome().versions[0]) == pytest.approx(SUPPLY_DAY)
+
+
+async def test_period_writing_leaves_the_combined_statistics_alone(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([1.0, 2.0, 3.0] * 16)
+    await async_insert_channel(hass, NMI, "Home", channel)
+    await async_insert_cost(hass, NMI, "Home", channel, _glohome())
+    kwh_before, cost_before = await _stored(hass), await _stored_cost(hass)
+    await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome())
+    assert await _stored(hass) == kwh_before
+    assert await _stored_cost(hass) == cost_before
+
+
+async def test_period_first_run_prices_the_stored_kwh_history(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Switching the option on later backfills everything the dashboard already has."""
+    await async_insert_channel(hass, NMI, "Home", _channel([1.0] * 48))
+    await async_wait_recording_done(hass)
+    recent = _channel([1.0] * 24, start=START + timedelta(days=1))
+    assert await async_insert_period_statistics(hass, NMI, "Home", recent, _glohome()) == 48
+    rows = await _period_rows(hass)
+    for slug in SLUGS:
+        assert _pair(rows, slug)[1][-1]["sum"] == pytest.approx(PERIOD_COST[slug], abs=1e-6)
+
+
+async def test_period_recalculate_reprices_from_a_day_and_only_when_asked(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([1.0] * 48)
+    await async_insert_channel(hass, NMI, "Home", channel)
+    await async_insert_cost(hass, NMI, "Home", channel, _glohome())
+    await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome())
+    await async_wait_recording_done(hass)
+    before = await _period_rows(hass)
+
+    # Same period names, new rate everywhere, no supply charge or discount.
+    cheaper = Tariff(
+        (
+            TariffVersion(
+                effective_from=D0,
+                import_periods=(
+                    Period("Peak", (Window(16, 21),), (Tier(None, 10.0),)),
+                    Period("Off-peak", (Window(21, 11),), (Tier(None, 10.0),)),
+                    Period("Shoulder", (Window(11, 16),), (Tier(None, 10.0),)),
+                ),
+            ),
+        )
+    )
+    from_day = date(2026, 10, 21)  # day two
+    # Without the flag the combined cost is repriced and the period statistics are not.
+    await async_recalculate_costs(hass, NMI, "Home", "E1", cheaper, from_day)
+    assert await _period_rows(hass) == before
+
+    written = await async_recalculate_costs(
+        hass, NMI, "Home", "E1", cheaper, from_day, period_statistics=True
+    )
+    assert written == 24  # the combined cost's hours
+    rows = await _period_rows(hass)
+    for slug in SLUGS:
+        kwh, cost = _pair(rows, slug)
+        assert kwh == _pair(before, slug)[0]  # readings did not change
+        assert cost[:24] == _pair(before, slug)[1][:24]  # day one untouched
+        _assert_consistent(cost)
+    after = sum(_pair(rows, slug)[1][-1]["sum"] for slug in SLUGS)
+    day_one = sum(_pair(before, slug)[1][23]["sum"] for slug in SLUGS)
+    assert after - day_one == pytest.approx(24 * 0.10, abs=1e-6)  # no discount, no supply
+
+
+async def test_period_only_splits_e1_and_never_a_partial_day(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    export = _channel([1.0] * 24, suffix="B1")
+    assert await async_insert_period_statistics(hass, NMI, "Home", export, _glohome()) == 0
+    partial = _channel([1.0] * 10)
+    assert await async_insert_period_statistics(hass, NMI, "Home", partial, _glohome()) == 0
+    assert all(not rows for rows in (await _period_rows(hass)).values())

@@ -32,11 +32,32 @@ describe.
   hour would drift by dollars over a year; micro-dollars cannot.
 * A poll only re-reads a recent window, so a tariff edit reprices just those days.
   ``async_recalculate_costs`` reprices older history from the stored kWh statistic.
+
+Per-period statistics (opt-in)
+------------------------------
+With the "statistics per tariff period" option on, each import period also gets its own
+kWh statistic (``<nmi>_e1_<slug>``) and cost statistic (``<nmi>_e1_<slug>_cost``), so the
+Energy dashboard can draw each period as its own grid source in its own colour. The combined
+``_e1`` and ``_e1_cost`` statistics are untouched and keep including the supply charge; the
+per-period costs exclude it (the user sets the dashboard's fixed daily cost adjustment).
+
+* The set of periods is the union of every tariff version's period names, keyed by slug (see
+  ``tariff.period_slugs``). A day priced under a version that lacks a period writes zero for
+  it, so every statistic has a row for every hour and the totals always add up.
+* All of a channel's period statistics are written together by one repair rule: if any of them
+  disagrees with the tariff and readings for a day (or has no rows while another does, as
+  when a period is added), everything from that day on is rewritten for all of them, with each
+  running total recalculated from its own row before. A re-run changes nothing.
+* A period that is renamed or removed from the latest version stops being written; its old
+  statistics stay in the database until the user clears them (Developer Tools > Statistics).
+  Statistics are never deleted automatically.
+* Only import periods are split. Export keeps its single ``_b1_compensation`` statistic.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 
 from homeassistant.components.recorder import get_instance
@@ -57,7 +78,16 @@ from homeassistant.util.unit_conversion import EnergyConverter
 
 from .const import DOMAIN
 from .nem12 import Channel
-from .tariff import KIND_EXPORT, KIND_IMPORT, Tariff, cost_for_day, local_day, local_day_hours
+from .tariff import (
+    KIND_EXPORT,
+    KIND_IMPORT,
+    Tariff,
+    cost_for_day,
+    cost_for_day_by_period,
+    local_day,
+    local_day_hours,
+    period_slugs,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,6 +112,16 @@ def cost_statistic_id_for(nmi: str, suffix: str) -> str:
     """Return the external statistic id holding a channel's cost (or export compensation)."""
     kind = "compensation" if suffix[:1].upper() == "B" else "cost"
     return f"{DOMAIN}:{nmi.lower()}_{suffix.lower()}_{kind}"
+
+
+def period_statistic_ids(nmi: str, slug: str) -> tuple[str, str]:
+    """Return a period's (kWh, cost) external statistic ids; ``slug`` is from tariff.period_slugs.
+
+    ``period_slugs`` never yields ``cost`` or a slug ending in ``_cost``, so these cannot clash
+    with each other or with the combined ``<nmi>_e1_cost`` statistic.
+    """
+    kwh = f"{DOMAIN}:{nmi.lower()}_e1_{slug}"
+    return kwh, f"{kwh}_cost"
 
 
 def channel_label(suffix: str) -> str:
@@ -118,6 +158,33 @@ def _cost_metadata(hass: HomeAssistant, nmi: str, suffix: str, name: str) -> Sta
         # The user's own currency, so the Energy dashboard's pickers keep listing it.
         unit_of_measurement=hass.config.currency,
     )
+
+
+def _period_metadata(
+    hass: HomeAssistant, nmi: str, site: str, period_name: str, slug: str
+) -> tuple[StatisticMetaData, StatisticMetaData]:
+    """Return the (kWh, cost) metadata of one period's statistics."""
+    kwh_id, cost_id = period_statistic_ids(nmi, slug)
+    label = f"{site} grid import {period_name}"
+    kwh = StatisticMetaData(
+        mean_type=StatisticMeanType.NONE,
+        has_sum=True,
+        name=label,
+        source=DOMAIN,
+        statistic_id=kwh_id,
+        unit_class=EnergyConverter.UNIT_CLASS,
+        unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+    )
+    cost = StatisticMetaData(
+        mean_type=StatisticMeanType.NONE,
+        has_sum=True,
+        name=f"{label} cost",
+        source=DOMAIN,
+        statistic_id=cost_id,
+        unit_class=None,
+        unit_of_measurement=hass.config.currency,
+    )
+    return kwh, cost
 
 
 async def async_last_stat_start(hass: HomeAssistant, statistic_id: str) -> datetime | None:
@@ -285,51 +352,94 @@ async def _async_write_costs(
         for day, readings in days.items()
     }
 
-    statistic_id = cost_statistic_id_for(nmi, suffix)
-    first_hour = min(min(rows) for rows in expected.values())
-    last_hour = max(max(rows) for rows in expected.values()) + timedelta(hours=1)
-    stored = await _async_rows(hass, statistic_id, first_hour, last_hour)
-    by_start = {row["start"]: row for row in stored}
-    newest = max(by_start) if by_start else None
+    return await _async_write_series(
+        hass,
+        [_Series(_cost_metadata(hass, nmi, suffix, name), expected)],
+        reprice_from=reprice_from,
+    )
+
+
+@dataclass(slots=True)
+class _Series:
+    """One statistic to write: its metadata and the value it should hold for every hour."""
+
+    metadata: StatisticMetaData
+    expected: dict[date, dict[datetime, float]]  # AEST day -> hour start (UTC) -> rounded state
+
+
+async def _async_write_series(
+    hass: HomeAssistant, series: list[_Series], *, reprice_from: date | None = None
+) -> int:
+    """Store whole days of expected values for statistics that are repaired together.
+
+    The statistics share the same days and hours. If ANY of them disagrees with what is
+    expected for a day, or has no rows in range while another does (a period just added),
+    every statistic is rewritten from that day on, each running total recalculated from its
+    own row before it. With nothing in disagreement only rows newer than each statistic's
+    newest are added, so an unchanged re-run writes nothing. Returns the most hours written
+    to any one statistic.
+    """
+    reference = series[0].expected
+    first_hour = min(min(rows) for rows in reference.values())
+    last_hour = max(max(rows) for rows in reference.values()) + timedelta(hours=1)
+    stored: dict[str, dict[float, dict]] = {}
+    for item in series:
+        statistic_id = item.metadata["statistic_id"]
+        rows = await _async_rows(hass, statistic_id, first_hour, last_hour)
+        stored[statistic_id] = {row["start"]: row for row in rows}
+    any_stored = any(stored.values())
 
     repair_day = reprice_from
-    if repair_day is None and newest is not None:
-        repair_day = _first_cost_disagreement(expected, by_start, newest)
+    if repair_day is None:
+        for item in series:
+            by_start = stored[item.metadata["statistic_id"]]
+            if by_start:
+                day = _first_cost_disagreement(item.expected, by_start, max(by_start))
+            elif any_stored:
+                day = next(iter(item.expected))  # nothing yet here, history elsewhere
+            else:
+                day = None
+            if day is not None and (repair_day is None or day < repair_day):
+                repair_day = day
 
-    if repair_day is not None:
-        start_of_day = local_day_hours(repair_day)[0]
-        running_sum, last_start = await _async_total_before(hass, statistic_id, start_of_day)
-        _LOGGER.info("Rewriting %s from %s", statistic_id, repair_day)
-    else:
-        last = await get_instance(hass).async_add_executor_job(
-            get_last_statistics, hass, 1, statistic_id, True, {"sum"}
-        )
-        if last and last.get(statistic_id):
-            # Every stored hour in range agrees; add only what is newer.
-            row = last[statistic_id][0]
-            running_sum, last_start = float(row.get("sum") or 0.0), row["start"]
+    written = 0
+    for item in series:
+        statistic_id = item.metadata["statistic_id"]
+        if repair_day is not None:
+            start_of_day = local_day_hours(repair_day)[0]
+            running_sum, last_start = await _async_total_before(hass, statistic_id, start_of_day)
+            _LOGGER.info("Rewriting %s from %s", statistic_id, repair_day)
         else:
-            running_sum, last_start = 0.0, None
+            last = await get_instance(hass).async_add_executor_job(
+                get_last_statistics, hass, 1, statistic_id, True, {"sum"}
+            )
+            if last and last.get(statistic_id):
+                # Every stored hour in range agrees; add only what is newer.
+                row = last[statistic_id][0]
+                running_sum, last_start = float(row.get("sum") or 0.0), row["start"]
+            else:
+                running_sum, last_start = 0.0, None
 
-    statistics: list[StatisticData] = []
-    for day, rows in expected.items():
-        if repair_day is not None and day < repair_day:
-            continue
-        for moment in sorted(rows):
-            if last_start is not None and moment.timestamp() <= last_start:
+        statistics: list[StatisticData] = []
+        for day, rows in item.expected.items():
+            if repair_day is not None and day < repair_day:
                 continue
-            running_sum = _micro(running_sum + rows[moment])
-            statistics.append(StatisticData(start=moment, state=rows[moment], sum=running_sum))
+            for moment in sorted(rows):
+                if last_start is not None and moment.timestamp() <= last_start:
+                    continue
+                running_sum = _micro(running_sum + rows[moment])
+                statistics.append(StatisticData(start=moment, state=rows[moment], sum=running_sum))
 
-    if statistics:
-        _LOGGER.debug(
-            "Adding %s hours to %s (through %s)",
-            len(statistics),
-            statistic_id,
-            statistics[-1]["start"],
-        )
-        async_add_external_statistics(hass, _cost_metadata(hass, nmi, suffix, name), statistics)
-    return len(statistics)
+        if statistics:
+            _LOGGER.debug(
+                "Adding %s hours to %s (through %s)",
+                len(statistics),
+                statistic_id,
+                statistics[-1]["start"],
+            )
+            async_add_external_statistics(hass, item.metadata, statistics)
+        written = max(written, len(statistics))
+    return written
 
 
 def _first_cost_disagreement(
@@ -383,13 +493,103 @@ async def async_insert_cost(
 
 
 async def async_recalculate_costs(
-    hass: HomeAssistant, nmi: str, name: str, suffix: str, tariff: Tariff, from_day: date
+    hass: HomeAssistant,
+    nmi: str,
+    name: str,
+    suffix: str,
+    tariff: Tariff,
+    from_day: date,
+    *,
+    period_statistics: bool = False,
 ) -> int:
     """Reprice a channel's history from ``from_day`` on, using the stored kWh statistic.
 
     Used when the tariff changed and older days should follow it. Rewrites every cost row
     from that day with the running total recalculated; nothing is read from the portal.
+    With ``period_statistics`` the import channel's per-period statistics are rewritten too
+    (from the current period list). The return value counts the combined cost's hours only.
     """
     start = local_day_hours(from_day)[0]
     hours = await _async_stored_hours(hass, nmi, suffix, start)
-    return await _async_write_costs(hass, nmi, name, suffix, tariff, hours, reprice_from=from_day)
+    written = await _async_write_costs(
+        hass, nmi, name, suffix, tariff, hours, reprice_from=from_day
+    )
+    if period_statistics and suffix.upper() == "E1":
+        await _async_write_periods(hass, nmi, name, tariff, hours, reprice_from=from_day)
+    return written
+
+
+# --- Per-period statistics ----------------------------------------------------------
+
+
+def _period_series(
+    hass: HomeAssistant,
+    nmi: str,
+    site: str,
+    tariff: Tariff,
+    days: dict[date, dict[datetime, float]],
+) -> list[_Series]:
+    """Build every period's kWh and cost series: a row per hour, zero outside the period."""
+    slugs = period_slugs(tariff, KIND_IMPORT)
+    kwh_rows: dict[str, dict[date, dict[datetime, float]]] = {s: {} for s in slugs.values()}
+    cost_rows: dict[str, dict[date, dict[datetime, float]]] = {s: {} for s in slugs.values()}
+    for day, readings in days.items():
+        for slug in slugs.values():
+            kwh_rows[slug][day] = {}
+            cost_rows[slug][day] = {}
+        for moment, item in cost_for_day_by_period(readings, tariff, KIND_IMPORT, day).items():
+            owner = slugs[item.period]
+            for slug in slugs.values():
+                mine = slug == owner
+                kwh_rows[slug][day][moment] = _micro(item.kwh) if mine else 0.0
+                cost_rows[slug][day][moment] = _micro(item.cost) if mine else 0.0
+
+    series: list[_Series] = []
+    for period_name, slug in slugs.items():
+        kwh_meta, cost_meta = _period_metadata(hass, nmi, site, period_name, slug)
+        series.append(_Series(kwh_meta, kwh_rows[slug]))
+        series.append(_Series(cost_meta, cost_rows[slug]))
+    return series
+
+
+async def _async_write_periods(
+    hass: HomeAssistant,
+    nmi: str,
+    name: str,
+    tariff: Tariff,
+    hours: dict[datetime, float],
+    *,
+    reprice_from: date | None = None,
+) -> int:
+    """Price whole days into every period's statistics together; return hours written."""
+    days = _complete_days(hours, dt_util.utcnow())
+    if not days:
+        return 0
+    series = _period_series(hass, nmi, name, tariff, days)
+    return await _async_write_series(hass, series, reprice_from=reprice_from)
+
+
+async def async_insert_period_statistics(
+    hass: HomeAssistant, nmi: str, name: str, channel: Channel, tariff: Tariff
+) -> int:
+    """Record the import channel's per-period kWh and cost; return hours written.
+
+    Only E1 is split. The first time (or when a period has been added, so one statistic has
+    no rows yet) the stored kWh history is priced too, not just this poll's window: turning
+    the option on backfills everything the dashboard already has.
+    """
+    if channel.suffix.upper() != "E1":
+        return 0
+    hours: dict[datetime, float] = {m.astimezone(UTC): kwh for m, kwh in channel.hours.items()}
+    new_statistic = False
+    for slug in period_slugs(tariff, KIND_IMPORT).values():
+        for statistic_id in period_statistic_ids(nmi, slug):
+            last = await get_instance(hass).async_add_executor_job(
+                get_last_statistics, hass, 1, statistic_id, True, {"sum"}
+            )
+            if not last or not last.get(statistic_id):
+                new_statistic = True
+    if new_statistic:
+        stored = await _async_stored_hours(hass, nmi, channel.suffix, dt_util.utc_from_timestamp(0))
+        hours = {**stored, **hours}
+    return await _async_write_periods(hass, nmi, name, tariff, hours)

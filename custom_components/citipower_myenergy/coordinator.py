@@ -18,6 +18,7 @@ from homeassistant.util import dt as dt_util
 from .api import MyEnergyApi
 from .const import (
     CONF_KEEPALIVE_MINUTES,
+    CONF_PERIOD_STATS,
     CONF_TARIFF,
     DEFAULT_KEEPALIVE_MINUTES,
     DOMAIN,
@@ -34,6 +35,7 @@ from .session_store import SessionStore
 from .statistics import (
     async_insert_channel,
     async_insert_cost,
+    async_insert_period_statistics,
     async_last_stat_start,
     statistic_id_for,
 )
@@ -130,12 +132,15 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
             raise UpdateFailed(str(err)) from err
 
         tariff = self._load_tariff()
+        period_stats = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
         for suffix, channel in channels.items():
             data.hours_added += await async_insert_channel(
                 self.hass, self.nmi, self.site_name, channel
             )
             if tariff is not None:
                 await self._async_insert_cost(channel, tariff)
+                if period_stats:
+                    await self._async_insert_period_statistics(channel, tariff)
             last_day = channel.last_day
             data.channels[suffix] = ChannelSummary(
                 suffix=suffix,
@@ -167,6 +172,23 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
             _LOGGER.warning("Could not price %s for %s: %s", channel.suffix, self.site_name, err)
         except Exception:
             _LOGGER.exception("Unexpected error recording %s cost for %s", channel.suffix, self.nmi)
+
+    async def _async_insert_period_statistics(self, channel: Channel, tariff: Tariff) -> None:
+        """Record per-period statistics; like cost, never let them stop the kWh import."""
+        try:
+            await async_insert_period_statistics(
+                self.hass, self.nmi, self.site_name, channel, tariff
+            )
+        except TariffError as err:
+            _LOGGER.warning(
+                "Could not price %s per period for %s: %s", channel.suffix, self.site_name, err
+            )
+        except Exception:
+            _LOGGER.exception(
+                "Unexpected error recording %s per-period statistics for %s",
+                channel.suffix,
+                self.nmi,
+            )
 
     async def _async_fetch_start(self, account: AccountInfo, end: date) -> date:
         """Decide how far back this poll needs to read."""
