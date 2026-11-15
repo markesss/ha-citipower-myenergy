@@ -382,6 +382,94 @@ open-ended, thresholds ascending.
 - [ ] **Decisions (user, 15 Nov 2026):** tiers are not in the guided UI (YAML editor only);
       tariff changes are versioned by effective date and history is repriced only by an
       explicit "recalculate" action; **no retailer presets**.
+- [ ] **Per-period statistics (coloured bars).** Live probe, 15 Nov 2026, HA 2026.11.1:
+      three real-usage kWh statistics added as three grid consumption sources, each with its
+      own cost statistic, **render in different colours**, HA accepts several grid sources,
+      and totals matched (kWh exactly; cost + supply = stored `_e1_cost`). Decisions (user):
+      - Build it as an **opt-in** option ("Also record a statistic per tariff period").
+        The combined `…_e1` and `…_e1_cost` stay exactly as they are.
+      - For each import period write `…_e1_<period_slug>` (kWh) and
+        `…_e1_<period_slug>_cost` (currency). Period names come from the tariff; slugs must
+        be stable, unique and survive renames sensibly (decide: slug from name, collisions
+        suffixed; renaming a period creates new statistics, leaving the old ones orphaned,
+        so warn in the UI).
+      - **Supply charge: use HA's own fixed daily adjustment** (`cost_adjustment_day` on the
+        grid source). The per-period cost statistics therefore **exclude** the supply
+        charge; the combined cost statistic keeps including it. The UI must show the value
+        to enter: supply charge x (1 - discount), GST-adjusted exactly as `tariff.py` does
+        (GLOHOME: 92.40 c x 0.97 = $0.89628/day), and say plainly that it is a fixed number:
+        when a new tariff version changes the supply charge or discount, the user must
+        update the dashboard adjustment themselves. Never enable both the combined cost
+        source and the per-period sources on the dashboard (it double counts); say so in the
+        UI text and README.
+      - Per-period costs must sum with the supply charge to the combined cost: add a test
+        (sum of period costs + days x daily supply == combined cost) at hour and day level.
+      - Reuse the whole-day pricing and repair logic; a tariff version or reading change
+        reprices every affected day for all period statistics together; a period list
+        change (rename, add, remove) needs a recalculation path. Export periods: out of
+        scope (no `B1`), but keep the design from blocking it.
+      - Needs `tariff.cost_for_day` to return per-period breakdowns (kWh and cost per
+        period per hour) without changing its current total; add that to `tariff.py` with
+        tests.
+      - Probe cleanup: remove the probe sources from the dashboard, run `stat_probe.clear`,
+        remove `stat_probe:` from `configuration.yaml`, delete the folder (it holds real
+        usage data), restart. Done only when the user says so.
+
+      **Built (uncommitted at the time of writing; 272 tests pass in Docker, Python 3.13.18,
+      HA test package 2026.2.3, ruff clean). Not yet tried on the live HA.**
+      - `tariff.py`: `cost_for_day_by_period` (kWh, cost per hour per period, supply charge
+        excluded), `daily_supply_dollars`, `period_slug`/`period_slugs`. `cost_for_day` and the
+        breakdown share one pricing pass (`_price_day`), so totals cannot diverge; the existing
+        `cost_for_day` tests pass unchanged.
+      - **Slugs:** lowercase `[a-z0-9_]`, runs collapsed, no edge underscores (HA statistic ids
+        reject them), capped at 40; empty becomes `period_<n>`; clashes get `_2`, `_3`. A slug
+        is never `cost` or ending `_cost` (it would make one period's kWh id equal another's
+        cost id, or the combined `_e1_cost`): those get a `_period` suffix.
+      - **Versions with different period sets:** the statistic set is the **union of every
+        version's period names** (oldest first), so adding a newer version never changes an
+        existing slug. A day priced under a version that lacks a period writes **zero** for
+        it, so every statistic has a row for every hour and per-hour kWh always adds up.
+      - `statistics.py`: the combined cost writer now uses a shared multi-series writer
+        (`_async_write_series`), behaviour and tests unchanged. Period statistics are written
+        by `async_insert_period_statistics` (E1 only, whole finished days only). **All period
+        statistics are repaired together:** if any disagrees for a day, or has no rows while
+        another does (a period was added), every one is rewritten from that day with each
+        running sum recalculated from its own previous row. A new period triggers the
+        full-history path, so it is backfilled from stored kWh. Re-runs write nothing.
+        `async_recalculate_costs(..., period_statistics=True)` rewrites them too (the return
+        value still counts the combined cost's hours only).
+      - **Renamed/removed periods are orphaned, never deleted:** they stop being written and
+        stay in the database; the UI text and README point to Developer Tools > Statistics.
+      - Export is not split (no `B1` on this account); `_b1_compensation` is unchanged.
+      - Option `CONF_PERIOD_STATS` (`period_statistics`, default off) in `entry.options`;
+        coordinator writes the statistics after the combined cost when it is on and a tariff
+        exists; a failure there is logged (with traceback) and never stops the kWh import or
+        the combined cost.
+      - UI: tariff menu entry "Statistics per tariff period" (only with a valid tariff): a
+        switch plus text with the exact daily adjustment (`AUD 0.89628` for GLOHOME), the
+        statistic ids, the double-count warning, "one grid source only" and "fixed number".
+        Saving reloads the entry (existing listener) and the first poll backfills. Recalculate
+        passes the option through. Strings and `translations/en.json` identical.
+      - **Backfill cost:** pricing 515 days into 6 statistics (74,160 rows) takes ~0.09 s of
+        CPU to build (measured), written through the recorder queue, so it does not block setup
+        noticeably; the poll's portal fetch is still only the last 7 days.
+      - Diagnostics: new `cost_tracking` summary (versions, supply, discount, GST, period names,
+        slugs, option). The raw tariff was already in `options`; the NMI is not in the summary.
+        Tests added in `tests/test_ha_diagnostics.py`.
+      - Docs: README "Cost tracking" section, `docs/ARCHITECTURE.md` "Cost tracking" section and
+        diagram nodes, `CLAUDE.md` layout lines appended.
+      - **Which grid source gets the daily adjustment, and how sure that is.** Verified: in
+        HA 2026.2.3's `energy/data.py` the grid source schema has a single required
+        `cost_adjustment_day` per grid source (not per `flow_from` entry), and the live
+        HA 2026.11.1 preferences hold one `cost_adjustment_day` on each grid entry (read via
+        `energy/get_prefs`). NOT verified: the frontend arithmetic (the frontend package is not
+        in the test image, so I could not read how it sums the adjustment across sources).
+        The UI text therefore says "on one grid source only, leave the others at 0" and asks
+        the user to check one day (dashboard grid cost = period costs + the adjustment). If
+        the dashboard turns out to apply it once overall, or to need it on every source,
+        change the wording in `strings.json` and the README.
+      - Known limit: the fixed adjustment is applied by the dashboard to every day shown,
+        including days before the tariff's first version and days under older rates.
 - [ ] **Later (backlog):** controlled load (`E2`), public holidays, demand charges.
 
 ### The live test plan: GloBird GLOHOME Residential (Flexible Rate), CitiPower, CZ 6
@@ -415,6 +503,15 @@ What this tells the design:
 - Use this tariff as the first `tariff.py` fixture, with the FOUR4FREE one second (tiers).
 - Acceptance: compare one month's estimated cost with the real GloBird bill. Expect a
   small difference from rounding, the discount, and any bill adjustments.
+- **Live check, v0.2.0b1 on HA 2026.11.1 (15 Nov 2026):** the GLOHOME tariff entered through
+  the options UI saved exactly as the sheet. `…_e1_cost` (AUD, `has_sum`) covered 12,360
+  hours / 515 days with 0 mismatches against an independent hour-by-hour recomputation
+  (max difference $0.000001; total $1,602.37), and the running sum was consistent. The
+  user selected it as the grid "total costs" source and the Energy dashboard shows it.
+  Still open: the real-bill comparison; history before the tariff's `effective_from` is
+  priced at the first version's rates (add earlier versions and recalculate for accuracy);
+  HA's energy prefs now have a native `cost_adjustment_day`, which must stay 0 because our
+  cost already includes the supply charge.
 
 ### Verify first (do before building the UI)
 

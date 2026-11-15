@@ -56,10 +56,15 @@ custom_components/citipower_myenergy/
   config_flow.py    user → method (email/SMS) → code → nmi; reauth; options
   sensor.py         latest data, latest-day kWh per channel, session status
   diagnostics.py    redacted diagnostics
+  tariff.py         PURE: tariff model + per-day pricing (AEST), per-period breakdown, slugs
+  tariff_form.py    PURE: helpers for the tariff options flow (form <-> dict, review text)
+  tariff_flow.py    HA: the tariff steps of the options flow (menu-driven)
+  (cost statistics and the opt-in per-period statistics live in statistics.py)
 tests/
   fixtures/         anonymised real portal responses (see docs/TESTING.md)
   test_portal.py    pure
   test_nem12.py     pure
+  test_tariff*.py   pure (tariff pricing, per-period breakdown, form helpers)
   test_ha_*.py      need pytest-homeassistant-custom-component
 ```
 

@@ -33,6 +33,61 @@ The first import of history takes about half a minute.
 solar, add **`<name> grid export`** (`citipower_myenergy:<nmi>_b1`) under
 *Return to grid*.
 
+## Cost tracking
+
+The portal has no prices (your retailer sets those), so you tell the integration your tariff and
+it works out an **estimated** cost for every hour of your usage. These are estimates, not a bill.
+
+**1. Enter your tariff.** *Settings → Devices & services → myEnergy → Configure → Electricity
+tariff and costs → Set up a tariff.*
+
+- **Flat rate:** one price for every hour.
+- **Time of use:** add a period for each price, with the hours it applies. Hours are whole hours
+  on a 24-hour clock, such as `16-21` (4pm to 9pm) or `9pm-11am`; an end at or before the start
+  runs past midnight, and `0-24` is all day. Separate several windows with commas, and pick the
+  days if it only applies on some. Every hour of the week has to belong to exactly one period;
+  the review step shows the resolved day and tells you about any gap or overlap.
+- Also enter the daily supply charge, whether your prices include GST, and any pay-on-time
+  discount (taken off supply and usage charges only).
+- Rates change, so add new rates **from a date** rather than editing old ones. Use *Recalculate
+  cost history* to reprice days that are already recorded. Per-day allowances ("first 30 kWh a
+  day free") are supported in the *Advanced: edit as YAML* step.
+
+> **All tariff times are AEST (UTC+10), with no daylight saving.** That is NEM (National
+> Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing
+> clock, not Home Assistant's own timezone, so a 4pm peak stays at 4pm AEST all year.
+
+**2. Use the cost in the Energy dashboard.** *Settings → Dashboards → Energy*, edit your grid
+consumption source, and under cost choose **Use an entity tracking the total costs** and pick
+**`<name> grid import cost`** (statistic `citipower_myenergy:<nmi>_e1_cost`). It already includes
+the daily supply charge, so leave the dashboard's own daily cost adjustment at 0.
+
+Nothing is written until you enter a tariff. Only whole finished days are priced, and only the
+main import channel (`E1`) is costed; controlled load is not.
+
+### Coloured bars: statistics per tariff period (optional)
+
+The dashboard draws one source in one colour. To see each tariff period in its own colour, turn on
+*Configure → Electricity tariff and costs → Statistics per tariff period*. Each import period then
+also gets its own kWh and cost statistics (for example `…_e1_peak` and `…_e1_peak_cost`), and the
+step lists them. Turning it on works out your whole stored history, which can take a minute.
+
+Then, in the Energy dashboard:
+
+1. Add one grid consumption source per period, each with that period's kWh statistic and, for
+   cost, **Use an entity tracking the total costs** with the matching `_cost` statistic.
+2. **Remove the combined grid source** (or turn off its cost). Using it as well counts your energy
+   and cost twice.
+3. The period costs leave out the daily supply charge. The step shows the amount to enter (for
+   example `AUD 0.89628`) as the **daily cost adjustment**. Enter it on **one** grid source only
+   and leave the others at 0. It is a fixed number: update it yourself if your supply charge or
+   discount changes, and note it applies to every day the dashboard shows.
+4. Check one day: the dashboard's grid cost should equal the period costs plus that amount.
+
+Renaming or removing a period stops its statistics being written but leaves the old ones in place;
+clear them in *Developer Tools → Statistics* if you do not want them. Turning the option off keeps
+everything already written.
+
 ## Sessions and re-signing in
 
 myEnergy requires a verification code at every sign-in, so the integration

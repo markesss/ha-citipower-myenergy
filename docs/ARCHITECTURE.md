@@ -14,6 +14,7 @@ flowchart TB
         di["diagnostics.py"]
         ss["session_store.py"]
         tls["tls.py"]
+        tf["tariff_flow.py"]
     end
     subgraph io["aiohttp"]
         direction LR
@@ -28,6 +29,8 @@ flowchart TB
         models["models.py"]
         exc["exceptions.py"]
         const["const.py"]
+        tariff["tariff.py"]
+        tform["tariff_form.py"]
     end
     ha --> io
     io --> pure
@@ -106,6 +109,37 @@ flowchart TD
   with the running sum recomputed from the hour before. This fixes estimates
   that are later replaced by actual readings.
 - Hours that haven't finished yet are never written.
+
+## Cost tracking
+
+The portal carries no prices, so the user describes their tariff (options flow:
+`tariff_flow.py`, with `tariff_form.py` building the text and form handling) and it is stored
+in `entry.options["tariff"]` as `Tariff.to_dict()`. `tariff.py` is pure: a `Tariff` is a list
+of versions by effective date; each has a supply charge, discount, GST flag and independent
+import and export `Period` lists (windows in whole hours, per-day tiers). Times are always
+AEST, the NEM clock. `cost_for_day` prices one whole AEST day of hourly kWh; the supply
+charge goes on the day's first hour, GST and the discount apply to import only.
+
+```mermaid
+flowchart LR
+    kwh["stored kWh<br/>(…_e1)"] --> day["whole finished AEST days<br/>tariff.cost_for_day"]
+    day --> cost["…_e1_cost<br/>(currency, has_sum)<br/>includes the supply charge"]
+    day --> byp["cost_for_day_by_period<br/>(opt-in)"]
+    byp --> per["…_e1_&lt;slug&gt; kWh and<br/>…_e1_&lt;slug&gt;_cost per period<br/>(supply charge excluded)"]
+```
+
+- Costs are written a **whole finished day** at a time and repaired with the same rule as kWh:
+  if a stored day's cost differs from what the tariff and readings now give, everything from
+  that day on is rewritten with the running total recalculated. A re-run writes nothing.
+  `async_recalculate_costs` reprices older history from the stored kWh.
+- **Per-period statistics** are optional (`period_statistics` option). Each import period gets
+  a kWh and a cost statistic, so the Energy dashboard can draw each as its own coloured grid
+  source. The period set is the union of all versions' period names, keyed by `period_slugs`;
+  every statistic has a row for every hour (zero outside its period). All of them are repaired
+  together, so they can never disagree. The user sets the dashboard's fixed daily cost
+  adjustment to `daily_supply_dollars` on one grid source, and must not also use the combined
+  cost source. Renamed or removed periods leave their old statistics behind, unwritten.
+- Turning the option on backfills the whole stored history on the next poll.
 
 ## Session persistence
 
