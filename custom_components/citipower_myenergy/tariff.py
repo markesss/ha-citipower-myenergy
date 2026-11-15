@@ -32,11 +32,16 @@ Decisions worth knowing
   retailers' fact sheets.
 * The **supply charge** is added to the first hour of the local day, for import only.
   Callers price whole days; if the first hour is absent it lands on the earliest hour given.
+* **Per-period breakdown.** ``cost_for_day_by_period`` prices the same way but returns each
+  hour's period, kWh and usage cost with the supply charge left out (it belongs to no
+  period): ``daily_supply_dollars`` gives it once per day. ``cost_for_day`` and the breakdown
+  share one pricing pass, so period costs plus supply always equal the day's total.
 """
 
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
@@ -332,6 +337,64 @@ def _tier_cents(tiers: tuple[Tier, ...], used: float, kwh: float) -> float:
     return cents
 
 
+@dataclass(frozen=True, slots=True)
+class HourCost:
+    """One priced hour split by period: where it fell, its kWh and its usage cost."""
+
+    period: str  # the period's name
+    kwh: float
+    cost: float  # dollars after GST and discount, EXCLUDING the daily supply charge
+
+
+def _charge_factor(version: TariffVersion, kind: str) -> float:
+    """Return what cents are multiplied by: GST and the discount, both charges-only."""
+    factor = 1.0
+    if kind == KIND_IMPORT:
+        if not version.prices_include_gst:
+            factor *= GST_FACTOR
+        factor *= 1 - version.discount_pct / 100
+    return factor
+
+
+def daily_supply_dollars(version: TariffVersion) -> float:
+    """Return one day's import supply charge in dollars, after GST and the discount.
+
+    It is exactly the amount ``cost_for_day`` puts on a day's first hour, and the number the
+    Energy dashboard's fixed daily cost adjustment needs when costs are split by period.
+    """
+    return version.supply_c_per_day * _charge_factor(version, KIND_IMPORT) / 100
+
+
+def _price_day(
+    hours: Mapping[datetime, float], tariff: Tariff, kind: str, day: date
+) -> tuple[TariffVersion, float, list[tuple[datetime, str, float, float]]]:
+    """Price one local day's usage (no supply charge) and say which period each hour fell in.
+
+    Returns the version used, its charge factor, and ``(hour, period name, kWh, cents)`` in time
+    order, where cents are the tiered usage charge before GST and the discount. Both
+    ``cost_for_day`` and ``cost_for_day_by_period`` sum this, so their totals cannot diverge.
+    The caller has already dealt with an empty day and a kind that has no periods.
+    """
+    version = tariff.version_for(day)
+    periods = version.periods(kind)
+    owners, problems = _slot_owners(periods)
+    if problems:
+        raise TariffError(f"Cannot price {kind} usage: {problems[0]}")
+
+    used: dict[int, float] = {}
+    rows: list[tuple[datetime, str, float, float]] = []
+    for moment, kwh in _normalise_hours(hours):
+        if local_day(moment) != day:
+            raise TariffError(f"{moment.isoformat()} is not in local day {day.isoformat()}")
+        local = moment.astimezone(MARKET_TZ)
+        index = owners[local.weekday() * 24 + local.hour]
+        charged = max(kwh, 0.0)
+        cents = _tier_cents(periods[index].tiers, used.get(index, 0.0), charged)
+        used[index] = used.get(index, 0.0) + charged
+        rows.append((moment, periods[index].name, kwh, cents))
+    return version, _charge_factor(version, kind), rows
+
+
 def cost_for_day(
     hours: Mapping[datetime, float], tariff: Tariff, kind: str, day: date
 ) -> dict[datetime, float]:
@@ -342,39 +405,86 @@ def cost_for_day(
     (positive money earned); callers decide how to present them.
     """
     version = tariff.version_for(day)
-    periods = version.periods(kind)
     ordered = _normalise_hours(hours)
     if not ordered:
         return {}
-    if not periods:
+    if not version.periods(kind):
         return {moment: 0.0 for moment, _ in ordered}
 
-    owners, problems = _slot_owners(periods)
-    if problems:
-        raise TariffError(f"Cannot price {kind} usage: {problems[0]}")
-
-    is_import = kind == KIND_IMPORT
-    # GST and the discount are charges-only; see the module docstring.
-    factor = 1.0
-    if is_import:
-        if not version.prices_include_gst:
-            factor *= GST_FACTOR
-        factor *= 1 - version.discount_pct / 100
-
-    used: dict[int, float] = {}
+    version, factor, rows = _price_day(hours, tariff, kind, day)
     costs: dict[datetime, float] = {}
-    for position, (moment, kwh) in enumerate(ordered):
-        if local_day(moment) != day:
-            raise TariffError(f"{moment.isoformat()} is not in local day {day.isoformat()}")
-        local = moment.astimezone(MARKET_TZ)
-        index = owners[local.weekday() * 24 + local.hour]
-        kwh = max(kwh, 0.0)
-        cents = _tier_cents(periods[index].tiers, used.get(index, 0.0), kwh)
-        used[index] = used.get(index, 0.0) + kwh
-        if is_import and position == 0:
+    for position, (moment, _name, _kwh, cents) in enumerate(rows):
+        if kind == KIND_IMPORT and position == 0:
             cents += version.supply_c_per_day
         costs[moment] = cents * factor / 100
     return costs
+
+
+def cost_for_day_by_period(
+    hours: Mapping[datetime, float], tariff: Tariff, kind: str, day: date
+) -> dict[datetime, HourCost]:
+    """Return each hour of a local day with the period it fell in, its kWh and usage cost.
+
+    Same pricing as ``cost_for_day`` (tiers, GST, discount) but the daily supply charge is NOT
+    in any period's cost: for import it is ``daily_supply_dollars`` once per day, so
+    ``sum(period costs) + daily_supply_dollars == sum(cost_for_day)`` for a whole day. A kind
+    with no periods prices at zero under an empty period name. Tier costs belong to the period
+    the hour fell in, so a period's per-day allowance is spent inside that period only.
+    """
+    ordered = _normalise_hours(hours)
+    if not ordered:
+        return {}
+    if not tariff.version_for(day).periods(kind):
+        return {moment: HourCost("", kwh, 0.0) for moment, kwh in ordered}
+    _, factor, rows = _price_day(hours, tariff, kind, day)
+    return {moment: HourCost(name, kwh, cents * factor / 100) for moment, name, kwh, cents in rows}
+
+
+# --- Period slugs -----------------------------------------------------------------------
+
+_SLUG_MAX = 40
+
+
+def period_slug(name: str) -> str:
+    """Return a period name as a statistic-id fragment: lowercase [a-z0-9_], no edge underscores.
+
+    Home Assistant statistic ids cannot start or end with an underscore or contain two in a
+    row, so runs of anything else collapse to one. A name with no ASCII letters or digits
+    gives an empty slug; ``period_slugs`` supplies a fallback.
+    """
+    slug = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:_SLUG_MAX]
+    return slug.strip("_")
+
+
+def period_slugs(tariff: Tariff, kind: str = KIND_IMPORT) -> dict[str, str]:
+    """Map every period name used by any version of the tariff to a unique, stable slug.
+
+    Statistics are keyed by slug across all versions: the set of names is the union over versions,
+    in order of first appearance (oldest version first), so adding a newer version never changes
+    an existing slug. A day priced under a version that lacks a period writes zero for it.
+    Slugs are made safe against the ids they are joined into: ``<nmi>_e1_<slug>`` (kWh) and
+    ``<nmi>_e1_<slug>_cost``, so a slug is never ``cost`` or ending in ``_cost`` (the kWh id of
+    one period would equal the cost id of another, or of the combined cost statistic). Empty
+    slugs become ``period_<n>`` and clashes get ``_2``, ``_3``...
+    """
+    names: list[str] = []
+    for version in tariff.versions:
+        for period in version.periods(kind):
+            if period.name not in names:
+                names.append(period.name)
+    used: set[str] = set()
+    mapping: dict[str, str] = {}
+    for number, name in enumerate(names, 1):
+        base = period_slug(name) or f"period_{number}"
+        if base == "cost" or base.endswith("_cost"):
+            base = f"{base}_period"
+        slug, extra = base, 2
+        while slug in used:
+            slug = f"{base}_{extra}"
+            extra += 1
+        used.add(slug)
+        mapping[name] = slug
+    return mapping
 
 
 def _normalise_hours(hours: Mapping[datetime, float]) -> list[tuple[datetime, float]]:
@@ -554,6 +664,7 @@ def flat_tariff(
 __all__ = [
     "KIND_EXPORT",
     "KIND_IMPORT",
+    "HourCost",
     "Kind",
     "Period",
     "Tariff",
@@ -562,7 +673,11 @@ __all__ = [
     "Tier",
     "Window",
     "cost_for_day",
+    "cost_for_day_by_period",
+    "daily_supply_dollars",
     "flat_tariff",
     "local_day",
     "local_day_hours",
+    "period_slug",
+    "period_slugs",
 ]
