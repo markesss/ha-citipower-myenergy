@@ -13,10 +13,43 @@ from .const import (
     CONF_NMI,
     CONF_NMI_ASSIGN_ID,
     CONF_NMI_ID,
+    CONF_PERIOD_STATS,
+    CONF_TARIFF,
 )
 from .coordinator import MyEnergyConfigEntry
+from .exceptions import TariffError
+from .tariff import Tariff, period_slugs
 
 TO_REDACT = {CONF_COOKIES, CONF_ADDRESS, CONF_NMI, CONF_NMI_ID, CONF_NMI_ASSIGN_ID}
+
+
+def _cost_tracking(entry: MyEnergyConfigEntry) -> dict[str, Any]:
+    """Summarise the tariff setup. Prices and period names are not secret; the NMI is not here."""
+    raw = entry.options.get(CONF_TARIFF)
+    summary: dict[str, Any] = {
+        "tariff_configured": bool(raw),
+        "period_statistics": bool(entry.options.get(CONF_PERIOD_STATS)),
+    }
+    if not raw:
+        return summary
+    try:
+        tariff = Tariff.from_dict(raw)
+    except TariffError as err:
+        summary["tariff_error"] = str(err)
+        return summary
+    summary["versions"] = [
+        {
+            "effective_from": version.effective_from.isoformat(),
+            "supply_c_per_day": version.supply_c_per_day,
+            "discount_pct": version.discount_pct,
+            "prices_include_gst": version.prices_include_gst,
+            "import_periods": [period.name for period in version.import_periods],
+            "export_periods": [period.name for period in version.export_periods],
+        }
+        for version in tariff.versions
+    ]
+    summary["period_slugs"] = list(period_slugs(tariff).values())
+    return summary
 
 
 async def async_get_config_entry_diagnostics(
@@ -28,6 +61,7 @@ async def async_get_config_entry_diagnostics(
     return {
         "entry": async_redact_data(dict(entry.data), TO_REDACT),
         "options": dict(entry.options),
+        "cost_tracking": _cost_tracking(entry),
         "session": {
             "dead": coordinator.session_dead,
             "signed_in_at": str(coordinator.signed_in_at),
