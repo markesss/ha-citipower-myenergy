@@ -162,6 +162,298 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
 - [ ] Optional: post on the HA community forum (thread "Reading Australian
       smart meter data" has people asking for exactly this).
 
+## Phase 7: Cost tracking (flat and time-of-use)
+
+Goal: the Energy dashboard shows cost for grid import and export. The portal has no
+price data (the retailer sets prices, not the network), so the user enters their tariff
+and the integration writes companion **cost statistics** that the dashboard reads as
+"Use an entity tracking the total costs".
+
+### Research findings (GloBird Victoria, 15 Nov 2026)
+
+Sources: `globirdenergy.com.au/legal/flexible/` and the CitiPower FOUR4FREE fact sheet
+(offer GLO812620MR, CZ 6). Use them to keep the data model honest, not as a spec for one
+retailer.
+
+- **Time windows are the same on all five Victorian networks** (CitiPower, Powercor,
+  United Energy, AusNet, Jemena). Only the distributor tariff codes and the **rates**
+  differ. So the model is per config entry (one NMI, one network); no network-keyed table.
+- Residential windows apply **every day**. There is no weekday/weekend split and no
+  seasons. Business tariffs are weekday-only (e.g. 9am–9pm), so allow an optional
+  day-of-week set per window.
+- Windows **cross midnight** (off-peak 9pm–11am; EASYEV 12am–6am). Some plans have a
+  "shoulder = all other times" catch-all.
+- **Per-day allowances inside a period.** FOUR4FREE 11am–3pm: first 30 kWh/day at
+  0.00 c/kWh, the remainder at 11.00 c/kWh. Export 4pm–11pm: first 30 kWh/day at
+  5.00 c, remainder 3.00 c. A flat rate per period is not enough; a period needs
+  optional tiers with a per-day threshold that resets each local day.
+- Real CitiPower FOUR4FREE (inc. GST): supply 129.80 c/day; 4pm–11pm 36.63 c;
+  11am–3pm tiered as above; 3pm–4pm and 11pm–11am 22.00 c; feed-in 11pm–4pm 0.00 c.
+  Good as a test fixture.
+- **Discounts** (2% pay on time + 1% direct debit) apply to supply and usage charges,
+  **not** to solar credit. Model one percentage discount applied to charges only.
+- **GST:** fact-sheet rates are inc. GST; other retailers quote ex. GST. Needs a toggle.
+- **Timezone.** GloBird says "local time (NO change for daylight savings)", which is
+  ambiguous on its own. Decided by the user: always fixed **AEST (NEM market time,
+  UTC+10, no DST)**, the same clock as the NEM12 timestamps. No wall-clock mode.
+- Rates are reviewed whenever the network tariffs change, and window definitions depend on
+  sign-up date (e.g. FOUR4FREE off-peak moved from 10am–2pm to 11am–3pm on 1 Jul 2026).
+  So the tariff must be **versioned by effective date**.
+- Not covered, deliberately: controlled load (a separate channel, charged regardless of
+  time), demand charges, public-holiday rules, concessions. None of the residential plans
+  read needed holidays. Revisit if a user needs them.
+- Not found: the fact-sheet rates for the other plans, the WHOLESAVE schedule mapping,
+  and GST wording on the flexible page. Do not hard-code presets until verified.
+
+### Data model (pure, no HA imports; new `tariff.py`)
+
+```
+Tariff
+  versions: list[TariffVersion]          # sorted by effective_from, first covers all earlier dates
+TariffVersion
+  effective_from: date
+  prices_include_gst: bool               # if false, multiply by 1.1 when costing
+  supply_c_per_day: float                # charged once per local day
+  discount_pct: float                    # on supply + usage, not export
+  import_periods: list[Period]
+  export_periods: list[Period]
+Period
+  name: str                              # "Peak", "Free window"...
+  windows: list[Window]                  # one rate can cover several windows (export 9pm–10am + 2pm–4pm)
+Window
+  start: time, end: time                 # end <= start means it crosses midnight
+  days: set[int] | None                  # None = every day
+  tiers: list[Tier]                      # one open-ended tier = a flat rate
+Tier
+  up_to_kwh_per_day: float | None        # None = remainder
+  c_per_kwh: float
+```
+
+Validation: every minute of a day on every applicable day is covered by exactly one period
+(overlap and gap checks), or one period is marked `catch_all`. Tiers: only the last may be
+open-ended, thresholds ascending.
+
+### Tasks
+
+- [x] **`tariff.py` (pure).** Parse and validate the model above; `period_for(local_dt)`;
+      `cost_for_day(hours: dict[datetime, float], version) -> dict[datetime, float]` that
+      walks a local day's hours in order, tracking per-period tier usage, and returns
+      each hour's cost. A period may span part of an hour boundary only if windows are on
+      whole hours, so restrict window edges to the data resolution (whole hours) and
+      say so in the UI. Tests: flat rate, three-band TOU, the FOUR4FREE fixture
+      (free first 30 kWh), midnight-crossing window, day-of-week window, gap and overlap
+      rejection, windows read in fixed AEST across Melbourne's DST changes, GST on and
+      off, discount.
+      Done: `tariff.py` and `tests/test_tariff.py` (62 tests; whole suite 91 passed on
+      Python 3.11 without HA), `TariffError` added to `exceptions.py`. Decisions:
+      - **API differs from the plan in one way:** `cost_for_day(hours, tariff, kind, day)`
+        takes the local `day` explicitly, because the tariff version is chosen by that date.
+        Every hour must fall in that local day or `TariffError` is raised. Helpers
+        `local_day(moment)` and `local_day_hours(day)` give callers the grouping and the
+        24 UTC hours of a day. `TariffVersion.period_for(local_dt, kind)` takes an AEST
+        datetime (only weekday and hour are read).
+      - **Local day:** always midnight to midnight AEST (`const.MARKET_TZ`), exactly 24 h.
+        The Melbourne wall-clock mode (`timezone_mode: clock`, 23/25-hour days) was built
+        and then **removed** on 15 Nov 2026 per the user's decision (AEST/NEM time is
+        firm). `from_dict` rejects a stored `timezone_mode` key with a clear message so a
+        tariff written for a wall clock can never be silently priced on the wrong one.
+        The tariff tests no longer need `tzdata`.
+      - **Window days** are the days a window *starts* on, so Friday 10pm–2am covers
+        Saturday 1am. `end == 24` is midnight; `start == end` is rejected (use 0–24).
+      - **Tiers** are cumulative per-day thresholds, tracked per period; the last tier must
+        be open-ended. Period names must be unique; `catch_all` periods have no windows.
+      - **GST is applied to import charges only.** Feed-in is paid as entered
+        (fact sheets say "incl. GST if any"). Discount: import supply + usage only. Supply
+        charge: first hour of the day, import only (earliest hour given if the first is
+        missing). Say if GST should also uplift export.
+      - Costs are returned in dollars, unrounded; export is a positive credit. Rounding and
+        sign are the statistics writer's job (see the sign-convention test).
+      - `flat_tariff(...)` convenience builder added for the "flat rate" UI path.
+- [ ] **Persistence.** Store the tariff in `entry.options` (JSON-serialisable; add a
+      schema version key). No migration needed for entries without it: cost tracking is
+      off until a tariff is configured.
+- [x] **Options flow UI.** Built (`tariff_flow.py`, pure helpers in `tariff_form.py`, strings,
+      `tests/test_ha_options_flow.py` and `tests/test_tariff_form.py`); see *Findings* below
+      this task's step list. Home Assistant has no table editor, so build a menu-driven flow:
+      1. *Tariff type*: flat rate or time of use.
+      2. *Basics*: effective-from date, the fixed AEST/NEM-time note (text only, see the
+         timezone note under *Verify first*), GST included, supply charge, discount %.
+      3. *Import periods*: list view with add / edit / delete. Each period form: name,
+         start hour, end hour, optional weekday selector, and a rate (flat) or tiers.
+         Flat rate is a single "All day" period, so both modes share one code path.
+      4. *Export periods*: same, optional (skip for accounts with no `B1`).
+      5. *Review*: show the resolved 24-hour map per day type and any gap/overlap error
+         before saving.
+      6. *Advanced*: edit the whole tariff as YAML via `ObjectSelector`, for copy-paste
+         and for tariffs the guided steps do not cover.
+      Reuse the same validation as `tariff.py`. Add strings and translations.
+
+      *Findings (options flow UI):*
+      - **Step map.** `init` menu → `keepalive` (unchanged form, now merges into the existing
+        options so the tariff survives) | `tariff` menu. No tariff: `tariff_setup`
+        (`tariff_type` → `tariff_basics` → `tariff_flat_rate` or `tariff_import_periods`) or
+        `tariff_advanced`. With a tariff: `tariff_edit_latest`, `tariff_add_version` (copies
+        the latest, today's date, refuses a date already used), `tariff_recalculate` (from-date
+        form → `statistics.async_recalculate_costs` per known channel, then aborts with
+        "rewrote N hours"), `tariff_advanced`, `tariff_remove`. Periods menu: `period_add`,
+        `period_edit` / `period_delete` (pick by name), `periods_done`. Import periods →
+        (export periods, only with a `B1` channel in the session store or an existing export
+        tariff) → `tariff_review` → `review_save`.
+      - **Period form** is flat: name, rate (c/kWh), hours as text (`16-21`, `4pm-9pm`,
+        `9pm-10am, 2pm-4pm`; whole hours, end <= start crosses midnight, `0-24` all day) and an
+        optional weekday multi-select shared by every window of the period.
+      - **Tier preservation (decision).** The guided editor *refuses* to edit a period with tiers,
+        an "all other times" rule or windows on different days (shown as advanced in the list;
+        edit → error `period_not_guided`, pointing to the YAML editor). Untouched periods are
+        carried through byte-for-byte when other fields or periods change; deleting is allowed.
+      - **Review** is a menu so a gap or overlap can't be saved: the description carries the
+        resolved hour map (grouped by day pattern, labelled AEST/NEM) and, when invalid, the
+        `tariff.py` error; `review_save` is only offered when `Tariff.from_dict` accepts it.
+      - **Timezone** is fixed text (the exact `TIMEZONE_NOTE` sentence) in every step that takes
+        times; a test keeps strings.json in step with the constant. No choice is offered.
+      - **Options saves take effect** through the existing update listener in `__init__.py`
+        (no change needed): saving reloads the entry, whose first refresh writes cost rows for
+        the new tariff. Recalculate changes no options, so it runs immediately and does not reload.
+      - Stored but invalid tariff: the tariff menu says so and offers a fresh start or YAML.
+      - **Not covered / follow-up.** Export steps were tested with synthetic `B1` suffixes only
+        (the user does not export). `tariff_remove` keeps already-written cost statistics.
+        Tests run on Linux in Docker (HA 2026.2.3 as pinned by the test package, Python 3.13):
+        the HA test package cannot import on Windows (`fcntl`).
+- [x] **Cost statistics.** In `statistics.py`, write `…_e1_cost` (and `_b1_cost`) as
+      external statistics: `unit_of_measurement="AUD"`, `has_sum=True`, `unit_class=None`,
+      `mean_type=NONE`. Export is a *compensation* statistic, written as **positive** money
+      earned (confirmed by the live sign test in *Verify first*).
+      Compute costs per **whole local day**, because tiers and the supply charge are
+      per-day. Charge the supply charge on the first hour of each local day, in the import
+      cost statistic only.
+      Done (15 Nov 2026), import side; export is built but untested against live data.
+      Decisions:
+      - **Ids and units:** `citipower_myenergy:<nmi>_e1_cost` (`cost_statistic_id_for`);
+        export compensation is `…_b1_compensation`, not `_b1_cost`, because the dashboard
+        treats it as compensation. The unit is `hass.config.currency`, **not** a hard-coded
+        `AUD`, so other users' pickers keep listing it. `unit_class=None`.
+      - **Only E1 and B1 are priced.** E2 (usually controlled load) follows different
+        rules, so it is skipped. B1 is written only if some tariff version has export periods.
+      - **Rounding:** each hour's `state` is rounded to a millionth of a dollar and `sum`
+        accumulates those rounded states, so the sum is exactly what the rows add up to.
+        Per-hour rounding to cents would drift by dollars over a year; micro-dollars cannot.
+      - **Partial days:** only whole, finished AEST days (all 24 hours present, day over) are
+        priced; anything else writes nothing, so a running total never has to be undone. A
+        day that arrives late is slotted in by the repair rule.
+      - **First run with a tariff** prices the stored kWh history too (not just the poll's
+        7-day window), by merging stored kWh rows under the freshly fetched ones.
+      - **Tariff edits only reprice the poll window automatically** (the last ~7 days, where
+        stored cost disagrees with the new price); older days keep their old price until
+        `async_recalculate_costs` is run. Surface that in the UI ("Recalculate history").
+- [x] **No double counting.** Reuse the existing repair logic: whenever kWh hours are
+      rewritten, rewrite the cost rows for every affected local day with the running sum
+      recalculated. A tariff change must not silently reprice history: new versions apply
+      from `effective_from`, and a "Recalculate history" action (options step or service)
+      rewrites cost from a chosen date. Tests in `test_ha_statistics.py`: first import,
+      incremental import, estimated-then-actual repair, tariff version boundary,
+      recalculation, idempotent re-run (no change in sums).
+      Done: the repair rule is "from the first day whose stored cost differs from what the
+      tariff now gives (or that was skipped mid-history), rewrite every complete day on with
+      the sum recalculated from the row before it". An unchanged re-run writes nothing.
+      `async_recalculate_costs(hass, nmi, name, suffix, tariff, from_day)` reprices from the
+      stored kWh statistic (no portal call) and is **not yet exposed in the UI**.
+      16 tests in `tests/test_ha_statistics.py` (first import, incremental, idempotent,
+      corrected reading on day one and on day two, tariff change, version boundary, partial
+      day, skipped day filled later, first-run backfill, recalculate, currency, E1/B1 only,
+      export positive, kWh untouched), each also checking every sum equals the running
+      total of the states.
+- [x] **Coordinator.** After inserting kWh, call the cost writer for the same channels. If
+      no tariff is configured, skip it. Add a *Latest day cost* sensor per channel
+      (monetary device class, AUD) if it proves useful; the statistics are the point.
+      Done: `coordinator.py` reads `entry.options[CONF_TARIFF]` (new const, `Tariff.to_dict`
+      form), skips cost when absent, ignores a saved tariff that fails validation with a
+      warning, and logs (with traceback) any other error in the cost step without stopping
+      the kWh import. `tests/test_ha_coordinator_cost.py` (5 tests) covers all four paths.
+      No *Latest day cost* sensor: not needed yet.
+      Test environment: native Windows cannot import the HA test package (`fcntl`), and only
+      Python 3.11 is installed, so the suite ran in Docker (`python:3.13`, HA 2026.2.3 as
+      pinned by the test package; the live HA is 2026.11.1, whose metadata fields matched).
+- [ ] **Diagnostics.** Include the tariff structure (prices are not secret), redacted
+      like everything else.
+- [ ] **Docs.** README section: how to configure a flat rate and a TOU tariff, worked
+      example from the FOUR4FREE fact sheet, and how to select the cost statistic in
+      *Settings → Dashboards → Energy → Grid consumption → Use an entity tracking the
+      total costs*. State plainly that costs are estimates, not a bill.
+- [ ] **Decisions (user, 15 Nov 2026):** tiers are not in the guided UI (YAML editor only);
+      tariff changes are versioned by effective date and history is repriced only by an
+      explicit "recalculate" action; **no retailer presets**.
+- [ ] **Later (backlog):** controlled load (`E2`), public holidays, demand charges.
+
+### The live test plan: GloBird GLOHOME Residential (Flexible Rate), CitiPower, CZ 6
+
+Offer GLO811981MR, released 28-10-2026
+(`…/Victorian_Energy_Fact_Sheet_GLO811981MR_Electricity_CZ_6.pdf`). All rates inc. GST.
+
+| Item | Rate |
+|---|---|
+| Daily supply | 92.40 c/day |
+| Import 4pm–9pm | 31.46 c/kWh |
+| Import 9pm–11am (crosses midnight) | 16.50 c/kWh |
+| Import 11am–4pm | 13.20 c/kWh |
+| Export 4pm–9pm | 3.00 c/kWh |
+| Export 9pm–10am and 2pm–4pm | 0.10 c/kWh |
+| Export 10am–2pm | 0.00 c/kWh |
+| Discount | 2% pay on time + 1% direct debit, on supply and usage only, not on solar credit |
+
+What this tells the design:
+- **Import and export windows differ**, so the two period lists must be independent
+  (confirmed; already in the model).
+- One export band is **two disjoint windows** (9pm–10am and 2pm–4pm) with one rate. The
+  period model must allow either several windows per rate or two periods sharing a name.
+  Decision: a period holds a **list of windows**, so "Off-peak export" is one period.
+- It has **no tiers**. Tiers (FOUR4FREE's 30 kWh/day allowances) stay in the data model
+  and `tariff.py`, but the guided UI for them can wait; they remain reachable through the
+  advanced YAML editor.
+- **The user's account has no `B1` channel** (confirmed, they do not export). Export cost
+  is only written if a `B1` channel appears, and the export steps are hidden otherwise.
+  The export rows in the table above are retained as a `tariff.py` test fixture only.
+- Use this tariff as the first `tariff.py` fixture, with the FOUR4FREE one second (tiers).
+- Acceptance: compare one month's estimated cost with the real GloBird bill. Expect a
+  small difference from rounding, the discount, and any bill adjustments.
+
+### Verify first (do before building the UI)
+
+- [x] ~~Total costs picker accepts an external statistic.~~ Confirmed by the user: the
+      dashboard UI offers a total-costs external statistic option. Still check, in the
+      first live run, that *our* cost statistic (AUD, `has_sum`) is listed in the picker.
+- [x] ~~Export compensation sign convention.~~ **Confirmed live (15 Nov 2026, HA 2026.11.1)
+      with `tools/stat_probe`:** a **positive** compensation statistic (+$0.10/h) *lowers*
+      the net grid total by $2.40 over 24 h; a **negative** one (-$0.10/h) *raises* it by
+      $2.40. So export compensation is written as **positive money earned**, and
+      `cost_for_day(..., kind="export")` already returns a positive credit, so no sign
+      flip is needed in the writer. Import cost is positive as expected ($4.80/24 h).
+      Not yet checked: which pickers listed each probe statistic, and the HA currency
+      setting vs. our `AUD` unit (do this in the first live run of the real statistics).
+      The probe is still installed on the live HA: run `stat_probe.clear`, remove the
+      `stat_probe:` line, delete the folder and restart when finished with it.
+- [x] ~~Retailer's plan found.~~ GLOHOME Flexible Rate, CitiPower (above).
+- [x] ~~Timezone mode.~~ **Decided by the user: tariff periods must be fixed AEST (NEM
+      market time, UTC+10, no DST).** There is a single mode; the Melbourne wall-clock
+      mode was removed from `tariff.py`. **UI decision (user): show the timezone as fixed
+      text, not a choice**, so people
+      entering rates know what clock the windows use. Wording: "All times are AEST (UTC+10),
+      with no daylight saving. This is NEM (National Electricity Market) time, which is
+      the clock the meter data and network tariffs use." The *Basics* step shows it, every
+      step that takes times repeats it in its description, and the *Review* step labels its
+      24-hour map with it. Strings must say it is a pricing clock, not Home Assistant's own
+      timezone.
+- [x] ~~Our cost statistic appears in the total-costs picker.~~ Confirmed by the user
+      (the probe's AUD statistic is listed). HA's currency is confirmed `AUD`
+      (`/api/config`, HA 2026.11.1), matching the statistic's unit. Cost statistics should
+      still use the configured `hass.config.currency` rather than a hard-coded `AUD`, so
+      other users' pickers keep listing them.
+- [x] ~~Feed-in option.~~ **The user does not export** (no `B1` channel). Export is
+      out of scope for this account: do not build or test the export UI/statistics against
+      it. Keep the export model in `tariff.py` (generic, tested, and the sign convention is
+      known) but make export strictly optional and hidden unless a `B1` channel is seen.
+- [ ] GST on export: moot for this account. The default in `tariff.py` (import only; export
+      paid as entered) stays; revisit only if an exporting user appears.
+
 ## Backlog / ideas
 
 - [ ] United Energy support: same portal, different username suffix (brand `UE`).

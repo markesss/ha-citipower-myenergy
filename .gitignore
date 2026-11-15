@@ -24,3 +24,6 @@ htmlcov/
 
 # Tooling caches
 .ruff_cache/
+
+# Throwaway local probe; never commit
+tools/stat_probe/
