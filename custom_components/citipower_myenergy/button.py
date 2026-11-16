@@ -22,6 +22,10 @@ from .entity import MyEnergyEntity
 
 _QUERY = re.compile(r"\?\S*")
 
+# A press polls the portal, so presses run one at a time (the entity also ignores a press while
+# its own poll is still running).
+PARALLEL_UPDATES = 1
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

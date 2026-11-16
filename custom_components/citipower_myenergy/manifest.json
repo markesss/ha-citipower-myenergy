@@ -4,7 +4,9 @@
   "categories": [
     "energy.meters_monitoring"
   ],
-  "codeowners": [],
+  "codeowners": [
+    "@markesss"
+  ],
   "config_flow": true,
   "dependencies": [
     "recorder"

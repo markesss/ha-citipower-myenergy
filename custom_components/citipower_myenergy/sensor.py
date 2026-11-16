@@ -34,6 +34,10 @@ from .tariff import (
     rate_at,
 )
 
+# Every sensor reads data the coordinator (or the tariff timeline) already holds and makes no
+# request of its own, so there is nothing to limit.
+PARALLEL_UPDATES = 0
+
 
 async def async_setup_entry(
     hass: HomeAssistant,

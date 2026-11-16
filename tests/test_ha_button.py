@@ -250,3 +250,11 @@ async def test_entity_and_unique_ids_are_stable(
     device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, NMI)})
     assert device is not None
     assert {e.device_id for e in registry.entities.values()} == {device.id}
+
+
+def test_platforms_declare_how_many_updates_run_at_once() -> None:
+    """Quality scale (parallel-updates): sensors only read held data, the button polls."""
+    from custom_components.citipower_myenergy import button, sensor
+
+    assert sensor.PARALLEL_UPDATES == 0
+    assert button.PARALLEL_UPDATES == 1
