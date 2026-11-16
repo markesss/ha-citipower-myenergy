@@ -49,6 +49,8 @@ async def test_the_tariff_structure_is_summarised(hass: HomeAssistant) -> None:
     assert result["cost_tracking"] == {
         "tariff_configured": True,
         "period_statistics": True,
+        "timezone": "Australia/Brisbane",  # no zone stored: fixed AEST
+        "timezone_set": False,
         "versions": [
             {
                 "effective_from": "2026-01-01",
@@ -61,6 +63,14 @@ async def test_the_tariff_structure_is_summarised(hass: HomeAssistant) -> None:
         ],
         "period_slugs": ["all_day"],
     }
+
+
+async def test_a_chosen_zone_is_reported(hass: HomeAssistant) -> None:
+    tariff = flat_tariff(25.0, effective_from=date(2026, 1, 1), timezone="Australia/Melbourne")
+    entry = _entry({CONF_TARIFF: tariff.to_dict()})
+    summary = (await async_get_config_entry_diagnostics(hass, entry))["cost_tracking"]
+    assert summary["timezone"] == "Australia/Melbourne"
+    assert summary["timezone_set"] is True
 
 
 async def test_a_bad_tariff_is_reported_not_raised(hass: HomeAssistant) -> None:

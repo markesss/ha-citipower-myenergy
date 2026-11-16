@@ -2,3 +2,5 @@
 # tests against; homeassistant follows from it.
 pytest-homeassistant-custom-component==0.13.316
 ruff
+# Windows has no system time zone database; tariff.py prices on named zones.
+tzdata

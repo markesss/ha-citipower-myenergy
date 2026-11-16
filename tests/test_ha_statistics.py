@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from homeassistant.components.recorder import Recorder
@@ -720,3 +721,235 @@ async def test_period_only_splits_e1_and_never_a_partial_day(
     partial = _channel([1.0] * 10)
     assert await async_insert_period_statistics(hass, NMI, "Home", partial, _glohome()) == 0
     assert all(not rows for rows in (await _period_rows(hass)).values())
+
+
+# --- The tariff clock: daylight saving days, zone changes ------------------------------------
+#
+# Melbourne clocks go back on Sunday 5 April 2026 (that day has 25 hours: 02:00 happens twice)
+# and forward on Sunday 4 October 2026 (23 hours: 02:00 does not exist). Costs are priced a
+# whole local day at a time, so these days must have exactly the hours they really have.
+#
+# GLOHOME with 1 kWh in every hour, by local hour (see above): a 24-hour day is $5.30299.
+#   25-hour day: one more off-peak hour (the repeated 2am)    5.30299 + 0.16005 = $5.46304
+#   23-hour day: one fewer off-peak hour (the skipped 2am)    5.30299 - 0.16005 = $5.14294
+
+MELBOURNE = ZoneInfo("Australia/Melbourne")
+FALL_BACK = date(2026, 4, 5)
+SPRING_FORWARD = date(2026, 10, 4)
+LONG_DAY, SHORT_DAY = 5.46304, 5.14294
+
+
+def _glohome_in(zone: str | None) -> Tariff:
+    return Tariff((replace(_glohome().versions[0], timezone=zone),))
+
+
+def _local_midnight(day: date, tz) -> datetime:
+    """The UTC instant a local day starts (hour arithmetic must be done on UTC datetimes)."""
+    return datetime.combine(day, time(0), tzinfo=tz).astimezone(UTC)
+
+
+def _expected_hour_cost(moment: datetime, tz) -> float:
+    """GLOHOME's cost of 1 kWh in an hour, restated from the fact sheet (an independent check)."""
+    local = moment.astimezone(tz)
+    cents = 31.46 if 16 <= local.hour < 21 else 13.20 if 11 <= local.hour < 16 else 16.50
+    if (moment - timedelta(hours=1)).astimezone(tz).date() != local.date():
+        cents += 92.40  # the supply charge rides on the first hour of each local day
+    return round(cents * 0.97 / 100, 6)
+
+
+def _rows_by_hour(rows: list[dict]) -> dict[datetime, dict]:
+    return {dt_util.utc_from_timestamp(row["start"]): row for row in rows}
+
+
+async def test_cost_a_25_hour_day_is_priced_with_all_25_hours(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    # 4, 5 (25 hours) and 6 April: 24 + 25 + 24 real hours.
+    start = _local_midnight(date(2026, 4, 4), MELBOURNE)
+    channel = _channel([1.0] * 73, start)
+    tariff = _glohome_in("Australia/Melbourne")
+    assert await async_insert_cost(hass, NMI, "Home", channel, tariff) == 73
+    rows = await _stored_cost(hass)
+    assert len(rows) == 73
+    for moment, row in _rows_by_hour(rows).items():
+        assert row["state"] == pytest.approx(_expected_hour_cost(moment, MELBOURNE), abs=1e-9)
+    assert rows[-1]["sum"] == pytest.approx(2 * DAY_COST + LONG_DAY, abs=1e-5)
+    # Both 02:00 hours (15:00Z AEDT, 16:00Z AEST) are off-peak; supply is charged once that day.
+    by_hour = _rows_by_hour(rows)
+    assert by_hour[datetime(2026, 4, 4, 15, tzinfo=UTC)]["state"] == pytest.approx(OFFPEAK)
+    assert by_hour[datetime(2026, 4, 4, 16, tzinfo=UTC)]["state"] == pytest.approx(OFFPEAK)
+    assert sum(1 for row in rows if row["state"] > 0.5) == 3  # one supply charge per day
+    _assert_consistent(rows)
+
+
+async def test_cost_a_23_hour_day_is_priced_with_its_23_hours(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    start = _local_midnight(date(2026, 10, 3), MELBOURNE)
+    channel = _channel([1.0] * 71, start)  # 24 + 23 + 24
+    tariff = _glohome_in("Australia/Melbourne")
+    assert await async_insert_cost(hass, NMI, "Home", channel, tariff) == 71
+    rows = await _stored_cost(hass)
+    assert len(rows) == 71
+    for moment, row in _rows_by_hour(rows).items():
+        assert row["state"] == pytest.approx(_expected_hour_cost(moment, MELBOURNE), abs=1e-9)
+    assert rows[-1]["sum"] == pytest.approx(2 * DAY_COST + SHORT_DAY, abs=1e-5)
+    _assert_consistent(rows)
+
+
+async def test_cost_a_day_with_the_wrong_number_of_hours_is_not_written(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """24 readings do not make a whole 25-hour day, so nothing is written for it."""
+    start = _local_midnight(FALL_BACK, MELBOURNE)
+    channel = _channel([1.0] * 24, start)
+    tariff = _glohome_in("Australia/Melbourne")
+    assert await async_insert_cost(hass, NMI, "Home", channel, tariff) == 0
+    assert await _stored_cost(hass) == []
+
+
+async def test_cost_rerun_across_daylight_saving_changes_nothing(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    tariff = _glohome_in("Australia/Melbourne")
+    channel = _channel([1.0] * 73, _local_midnight(date(2026, 4, 4), MELBOURNE))
+    await async_insert_cost(hass, NMI, "Home", channel, tariff)
+    before = await _stored_cost(hass)
+    assert await async_insert_cost(hass, NMI, "Home", channel, tariff) == 0
+    assert await _stored_cost(hass) == before
+
+
+@pytest.mark.parametrize("zone", [None, "Australia/Brisbane"])
+async def test_cost_fixed_aest_is_unaffected_by_daylight_saving(
+    recorder_mock: Recorder, hass: HomeAssistant, zone: str | None
+) -> None:
+    """No zone and Brisbane both mean the old behaviour: every day is exactly 24 hours."""
+    start = _local_midnight(date(2026, 4, 4), MARKET_TZ)
+    channel = _channel([1.0] * 72, start)
+    assert await async_insert_cost(hass, NMI, "Home", channel, _glohome_in(zone)) == 72
+    rows = await _stored_cost(hass)
+    assert [row["state"] for row in rows] == pytest.approx(_day_states() * 3, abs=1e-9)
+    assert rows[-1]["sum"] == pytest.approx(3 * DAY_COST, abs=1e-5)
+
+
+async def test_cost_gmt_prices_whole_utc_days(recorder_mock: Recorder, hass: HomeAssistant) -> None:
+    channel = _channel([1.0] * 48, datetime(2026, 11, 9, tzinfo=UTC))
+    assert await async_insert_cost(hass, NMI, "Home", channel, _glohome_in("GMT")) == 48
+    by_hour = _rows_by_hour(await _stored_cost(hass))
+    assert by_hour[datetime(2026, 11, 9, tzinfo=UTC)]["state"] == pytest.approx(MIDNIGHT)
+    assert by_hour[datetime(2026, 11, 9, 16, tzinfo=UTC)]["state"] == pytest.approx(PEAK)
+    assert by_hour[datetime(2026, 11, 9, 15, tzinfo=UTC)]["state"] == pytest.approx(SHOULDER)
+
+
+async def test_cost_changing_the_zone_reprices_and_keeps_the_running_total_consistent(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Fixed AEST to Melbourne in summer moves every day edge and window by an hour."""
+    channel = _channel([1.0] * 48, datetime(2026, 11, 9, tzinfo=UTC))
+    await async_insert_cost(hass, NMI, "Home", channel, _glohome_in(None))
+    by_hour = _rows_by_hour(await _stored_cost(hass))
+    at_0500 = datetime(2026, 11, 10, 5, tzinfo=UTC)
+    assert by_hour[at_0500]["state"] == pytest.approx(SHOULDER)  # 3pm AEST
+    await async_wait_recording_done(hass)
+
+    await async_insert_cost(hass, NMI, "Home", channel, _glohome_in("Australia/Melbourne"))
+    rows = await _stored_cost(hass)
+    by_hour = _rows_by_hour(rows)
+    assert by_hour[at_0500]["state"] == pytest.approx(PEAK)  # now 4pm AEDT
+    # The Melbourne day 10 Nov is 13:00Z on the 9th to 12:00Z on the 10th: priced afresh.
+    for hour in range(24):
+        moment = datetime(2026, 11, 9, 13, tzinfo=UTC) + timedelta(hours=hour)
+        assert by_hour[moment]["state"] == pytest.approx(
+            _expected_hour_cost(moment, MELBOURNE), abs=1e-9
+        )
+    # The hour after it still holds its old price, but its running total is re-chained, so no
+    # hour shows a spike or a dip while it waits for the next day to complete.
+    tail = datetime(2026, 11, 10, 13, tzinfo=UTC)
+    assert tail in by_hour and max(by_hour) == tail
+    assert by_hour[tail]["state"] == pytest.approx(OFFPEAK)
+    _assert_consistent(rows)
+
+    # When the next Melbourne day completes, that hour is priced properly (it is its midnight).
+    longer = _channel([1.0] * 72, datetime(2026, 11, 9, tzinfo=UTC))
+    await async_wait_recording_done(hass)
+    await async_insert_cost(hass, NMI, "Home", longer, _glohome_in("Australia/Melbourne"))
+    rows = await _stored_cost(hass)
+    assert len(rows) == 48
+    assert _rows_by_hour(rows)[tail]["state"] == pytest.approx(MIDNIGHT)
+    assert rows[-1]["sum"] == pytest.approx(2 * DAY_COST, abs=1e-5)
+    _assert_consistent(rows)
+
+
+async def test_cost_recalculate_moves_all_history_to_a_new_zone(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """The explicit recalculation (what the options flow runs) reprices every stored day."""
+    start = datetime(2026, 3, 30, tzinfo=UTC)  # spans the April fall-back
+    channel = _channel([1.0] * (24 * 14), start)
+    await async_insert_channel(hass, NMI, "Home", channel)
+    await async_insert_cost(hass, NMI, "Home", channel, _glohome_in(None))
+    await async_wait_recording_done(hass)
+
+    melbourne = _glohome_in("Australia/Melbourne")
+    far_past = date(2000, 1, 1)
+    await async_recalculate_costs(hass, NMI, "Home", "E1", melbourne, far_past)
+    rows = await _stored_cost(hass)
+    by_hour = _rows_by_hour(rows)
+    # Every row inside a complete Melbourne day is priced on the Melbourne clock.
+    complete_start = _local_midnight(date(2026, 3, 31), MELBOURNE)
+    complete_end = _local_midnight(date(2026, 4, 13), MELBOURNE)
+    moment = complete_start
+    while moment < complete_end:
+        assert by_hour[moment]["state"] == pytest.approx(
+            _expected_hour_cost(moment, MELBOURNE), abs=1e-9
+        ), moment
+        moment += timedelta(hours=1)
+    _assert_consistent(rows)
+    # The 25-hour day is in there, whole.
+    day_start = _local_midnight(FALL_BACK, MELBOURNE)
+    day_end = _local_midnight(date(2026, 4, 6), MELBOURNE)
+    assert sum(1 for m in by_hour if day_start <= m < day_end) == 25
+
+    # Running it again changes nothing.
+    again = await async_recalculate_costs(hass, NMI, "Home", "E1", melbourne, far_past)
+    assert again > 0
+    assert await _stored_cost(hass) == rows
+
+    # Following polls agree with it, so a normal import writes nothing.
+    assert await async_insert_cost(hass, NMI, "Home", channel, melbourne) == 0
+    assert await _stored_cost(hass) == rows
+
+
+async def test_period_split_agrees_with_the_combined_statistics_across_daylight_saving(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """Periods' costs plus the supply charge equal the combined cost on 23 and 25 hour days."""
+    tariff = _glohome_in("Australia/Melbourne")
+    for first_day, hours in ((date(2026, 4, 4), 73), (date(2026, 10, 3), 71)):
+        values = [((i * 7) % 11) / 3 + 0.25 for i in range(hours)]
+        channel = _channel(values, _local_midnight(first_day, MELBOURNE))
+        await async_insert_channel(hass, NMI, "Home", channel)
+        await async_insert_cost(hass, NMI, "Home", channel, tariff)
+        await async_insert_period_statistics(hass, NMI, "Home", channel, tariff)
+    rows = await _period_rows(hass)
+    combined_cost = await _stored_cost(hass)
+    combined_kwh = await _stored(hass)
+    assert len(combined_cost) == 73 + 71
+
+    days = 6
+    period_cost_total = sum(_pair(rows, slug)[1][-1]["sum"] for slug in SLUGS)
+    assert period_cost_total + days * SUPPLY_DAY == pytest.approx(
+        combined_cost[-1]["sum"], abs=1e-4
+    )
+    assert sum(_pair(rows, slug)[0][-1]["sum"] for slug in SLUGS) == pytest.approx(
+        combined_kwh[-1]["sum"], abs=1e-4
+    )
+    # Hour by hour: only the first hour of each local day carries the supply charge.
+    first_hours = {_local_midnight(date(2026, 4, d), MELBOURNE) for d in (4, 5, 6)} | {
+        _local_midnight(date(2026, 10, d), MELBOURNE) for d in (3, 4, 5)
+    }
+    for index, row in enumerate(combined_cost):
+        moment = dt_util.utc_from_timestamp(row["start"])
+        supply = SUPPLY_DAY if moment in first_hours else 0.0
+        periods = sum(_pair(rows, slug)[1][index]["state"] for slug in SLUGS)
+        assert periods + supply == pytest.approx(row["state"], abs=2e-6), moment

@@ -37,6 +37,9 @@ def _cost_tracking(entry: MyEnergyConfigEntry) -> dict[str, Any]:
     except TariffError as err:
         summary["tariff_error"] = str(err)
         return summary
+    # A zone is a setting, not an identifier. Unset (fixed AEST) reads as Australia/Brisbane.
+    summary["timezone"] = tariff.zone_name
+    summary["timezone_set"] = any(version.timezone for version in tariff.versions)
     summary["versions"] = [
         {
             "effective_from": version.effective_from.isoformat(),

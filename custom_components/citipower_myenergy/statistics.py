@@ -19,9 +19,11 @@ for export, positive; the Energy dashboard subtracts it, verified live). Only E1
 priced: other channels (E2 is usually controlled load) follow rules a single tariff does not
 describe.
 
-* Costs are priced a **whole local (AEST) day** at a time, because tier allowances and the
-  daily supply charge are per day. Only days with all 24 hours of readings that have ended
-  are written; a partial day writes nothing, so a running total never has to be undone.
+* Costs are priced a **whole local day** at a time, because tier allowances and the daily
+  supply charge are per day. The day is midnight to midnight on the tariff's clock (see
+  ``tariff.py``): 24 hours, or 23 or 25 on a daylight saving changeover day for zones that
+  observe it. Only days with every hour of readings that have ended are written; a partial
+  day writes nothing, so a running total never has to be undone.
 * The same repair rule as the kWh statistic applies: if a day's expected cost differs from
   what is stored (new readings, an estimate replaced by an actual, a changed tariff) or a
   day was skipped in the middle of stored history, everything from that day on is rewritten
@@ -31,7 +33,9 @@ describe.
   rounded states, so the total is exactly what the rows add up to. Rounding to cents per
   hour would drift by dollars over a year; micro-dollars cannot.
 * A poll only re-reads a recent window, so a tariff edit reprices just those days.
-  ``async_recalculate_costs`` reprices older history from the stored kWh statistic.
+  ``async_recalculate_costs`` reprices older history from the stored kWh statistic. That
+  includes a changed tariff timezone, which moves every day's edges and every window: the
+  stored cost rows then disagree from the first affected day and are rewritten from there.
 
 Per-period statistics (opt-in)
 ------------------------------
@@ -39,7 +43,8 @@ With the "statistics per tariff period" option on, each import period also gets 
 kWh statistic (``<nmi>_e1_<slug>``) and cost statistic (``<nmi>_e1_<slug>_cost``), so the
 Energy dashboard can draw each period as its own grid source in its own colour. The combined
 ``_e1`` and ``_e1_cost`` statistics are untouched and keep including the supply charge; the
-per-period costs exclude it (the user sets the dashboard's fixed daily cost adjustment).
+per-period costs exclude it. (The dashboard's fixed daily cost adjustment is not applied with
+per-period sources, so in this mode the supply charge is simply not shown; see the README.)
 
 * The set of periods is the union of every tariff version's period names, keyed by slug (see
   ``tariff.period_slugs``). A day priced under a version that lacks a period writes zero for
@@ -58,7 +63,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, tzinfo
 
 from homeassistant.components.recorder import get_instance
 from homeassistant.components.recorder.models import (
@@ -307,16 +312,19 @@ def _prices_channel(suffix: str, tariff: Tariff) -> str | None:
 
 
 def _complete_days(
-    hours: dict[datetime, float], now: datetime
+    hours: dict[datetime, float], now: datetime, tz: tzinfo
 ) -> dict[date, dict[datetime, float]]:
-    """Group readings by AEST day, keeping only days that are whole and over."""
+    """Group readings by day on the tariff's clock, keeping only days that are whole and over.
+
+    A whole day has every hour that day really has: 24, or 23/25 on a daylight saving change.
+    """
     by_day: dict[date, dict[datetime, float]] = {}
     for moment, kwh in hours.items():
         utc = moment.astimezone(UTC)
-        by_day.setdefault(local_day(utc), {})[utc] = kwh
+        by_day.setdefault(local_day(utc, tz), {})[utc] = kwh
     complete: dict[date, dict[datetime, float]] = {}
     for day, readings in by_day.items():
-        expected = local_day_hours(day)
+        expected = local_day_hours(day, tz)
         if set(readings) == set(expected) and expected[-1] + timedelta(hours=1) <= now:
             complete[day] = readings
     return dict(sorted(complete.items()))
@@ -340,7 +348,7 @@ async def _async_write_costs(
     kind = _prices_channel(suffix, tariff)
     if kind is None:
         return 0
-    days = _complete_days(hours, dt_util.utcnow())
+    days = _complete_days(hours, dt_util.utcnow(), tariff.tzinfo)
     if not days:
         return 0
 
@@ -355,6 +363,7 @@ async def _async_write_costs(
     return await _async_write_series(
         hass,
         [_Series(_cost_metadata(hass, nmi, suffix, name), expected)],
+        tariff.tzinfo,
         reprice_from=reprice_from,
     )
 
@@ -364,11 +373,15 @@ class _Series:
     """One statistic to write: its metadata and the value it should hold for every hour."""
 
     metadata: StatisticMetaData
-    expected: dict[date, dict[datetime, float]]  # AEST day -> hour start (UTC) -> rounded state
+    expected: dict[date, dict[datetime, float]]  # local day -> hour start (UTC) -> rounded state
 
 
 async def _async_write_series(
-    hass: HomeAssistant, series: list[_Series], *, reprice_from: date | None = None
+    hass: HomeAssistant,
+    series: list[_Series],
+    tz: tzinfo,
+    *,
+    reprice_from: date | None = None,
 ) -> int:
     """Store whole days of expected values for statistics that are repaired together.
 
@@ -406,7 +419,7 @@ async def _async_write_series(
     for item in series:
         statistic_id = item.metadata["statistic_id"]
         if repair_day is not None:
-            start_of_day = local_day_hours(repair_day)[0]
+            start_of_day = local_day_hours(repair_day, tz)[0]
             running_sum, last_start = await _async_total_before(hass, statistic_id, start_of_day)
             _LOGGER.info("Rewriting %s from %s", statistic_id, repair_day)
         else:
@@ -430,6 +443,9 @@ async def _async_write_series(
                 running_sum = _micro(running_sum + rows[moment])
                 statistics.append(StatisticData(start=moment, state=rows[moment], sum=running_sum))
 
+        if repair_day is not None and statistics:
+            running_sum = await _async_keep_the_tail(hass, statistic_id, statistics, running_sum)
+
         if statistics:
             _LOGGER.debug(
                 "Adding %s hours to %s (through %s)",
@@ -440,6 +456,32 @@ async def _async_write_series(
             async_add_external_statistics(hass, item.metadata, statistics)
         written = max(written, len(statistics))
     return written
+
+
+async def _async_keep_the_tail(
+    hass: HomeAssistant, statistic_id: str, statistics: list[StatisticData], running_sum: float
+) -> float:
+    """Re-chain any stored rows after a rewrite so no running total is left pointing backwards.
+
+    A rewrite covers whole days on the tariff's clock. If the clock changed, the last complete
+    day now ends at a different instant, and an hour that was priced under the old clock can sit
+    just beyond the rewritten rows with an old running total: the dashboard would show that hour
+    as a spike or a dip until the next day completes and overwrites it. Keeping its own state
+    but recalculating its sum from the rows before it makes the chain consistent meanwhile.
+    The next complete day replaces it with the right price.
+    """
+    after = statistics[-1]["start"] + timedelta(hours=1)
+    for row in await _async_rows(hass, statistic_id, after, dt_util.utcnow() + timedelta(hours=1)):
+        state = row.get("state")
+        if state is None:
+            continue
+        running_sum = _micro(running_sum + float(state))
+        statistics.append(
+            StatisticData(
+                start=dt_util.utc_from_timestamp(row["start"]), state=float(state), sum=running_sum
+            )
+        )
+    return running_sum
 
 
 def _first_cost_disagreement(
@@ -509,7 +551,7 @@ async def async_recalculate_costs(
     With ``period_statistics`` the import channel's per-period statistics are rewritten too
     (from the current period list). The return value counts the combined cost's hours only.
     """
-    start = local_day_hours(from_day)[0]
+    start = local_day_hours(from_day, tariff.tzinfo)[0]
     hours = await _async_stored_hours(hass, nmi, suffix, start)
     written = await _async_write_costs(
         hass, nmi, name, suffix, tariff, hours, reprice_from=from_day
@@ -562,11 +604,11 @@ async def _async_write_periods(
     reprice_from: date | None = None,
 ) -> int:
     """Price whole days into every period's statistics together; return hours written."""
-    days = _complete_days(hours, dt_util.utcnow())
+    days = _complete_days(hours, dt_util.utcnow(), tariff.tzinfo)
     if not days:
         return 0
     series = _period_series(hass, nmi, name, tariff, days)
-    return await _async_write_series(hass, series, reprice_from=reprice_from)
+    return await _async_write_series(hass, series, tariff.tzinfo, reprice_from=reprice_from)
 
 
 async def async_insert_period_statistics(

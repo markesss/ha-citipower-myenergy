@@ -15,11 +15,24 @@ tier, and a per-day allowance ("first 30 kWh/day free, then 11c") is two.
 
 Decisions worth knowing
 -----------------------
-* **Local day.** Always midnight to midnight AEST (``const.MARKET_TZ``, UTC+10, no daylight
-  saving), so a day is exactly 24 hours. That is NEM (market) time: the clock the NEM12
-  meter data and the network tariffs use, and the clock window hours are read in. Retailer
-  sheets that say "local time" are taken to mean it. ``cost_for_day`` is told which day it
-  is pricing because the tariff version is chosen by that date.
+* **Tariff clock.** Window hours and the local day are read on the tariff's clock, which the
+  user chooses (``TariffVersion.timezone``, one of ``ALLOWED_TIMEZONES``). Some retailers
+  (GloBird) price on the wall clock *with* daylight saving, others on fixed AEST (NEM time).
+  The meter data itself is always AEST market time; that is parsed elsewhere
+  (``const.MARKET_TZ``) and only the pricing clock is selectable. A version with no
+  ``timezone`` is fixed AEST (UTC+10, no daylight saving), which is what tariffs stored
+  before the option existed did, so they price exactly as before.
+* **Local day.** Midnight to midnight on the tariff clock: 24 hours, or 23 or 25 on the day
+  daylight saving starts or ends. On a 25-hour day the repeated hour matches its window twice;
+  on a 23-hour day the skipped hour does not exist. Hours are UTC-aligned, so windows made of
+  whole local hours only line up because every allowed zone has a whole-hour UTC offset.
+  ``cost_for_day`` is told which day it is pricing because the tariff version is chosen by
+  that date (a date label on the tariff clock).
+* **One clock per tariff.** Every version must use the same timezone (``Tariff.validate``
+  rejects a mix). A retailer's clock does not change when its prices do, and mixing zones
+  would leave an hour that belongs to no day, or two days, around the version boundary. The
+  UI sets the zone for the whole tariff; a version without the key counts as
+  ``Australia/Brisbane`` (fixed AEST) for this check.
 * **Windows** use whole hours only (the data is hourly). ``end <= start`` crosses midnight
   and ``end == 24`` means midnight. A window's ``days`` are the days it *starts* on: a
   Friday 10pm-2am window covers Saturday 1am too.
@@ -44,13 +57,51 @@ import math
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
+from functools import cache
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .const import MARKET_TZ
 from .exceptions import TariffError
 
 SCHEMA_VERSION = 1
+
+# The clocks a tariff can be priced on. Only zones whose UTC offset is always a whole number of
+# hours are offered: statistics are hourly on UTC hour boundaries, so a whole local hour only
+# lines up with a statistics hour if the offset is whole. That rules out Adelaide and Broken
+# Hill (+9:30/+10:30), Darwin (+9:30), Eucla (+8:45) and Lord Howe (+10:30/+11), which would
+# need half-hour or quarter-hour statistics. Canberra is Sydney's rules under another name.
+ALLOWED_TIMEZONES = (
+    "Australia/Melbourne",
+    "Australia/Sydney",
+    "Australia/Hobart",
+    "Australia/Canberra",
+    "Australia/Brisbane",
+    "Australia/Perth",
+    "GMT",
+)
+DEFAULT_TIMEZONE = "Australia/Melbourne"  # for tariffs created in the UI (Victorian networks)
+# What a version with no ``timezone`` key means: fixed AEST, UTC+10 with no daylight saving.
+# Brisbane has the same offsets, so it is also how that clock is shown and compared.
+LEGACY_TIMEZONE = "Australia/Brisbane"
+
+
+@cache
+def zone_for(name: str | None) -> tzinfo:
+    """Return the tzinfo for a stored zone name (None is fixed AEST; GMT needs no database)."""
+    if name is None:
+        return MARKET_TZ
+    if name == "GMT":
+        return UTC
+    try:
+        return ZoneInfo(name)
+    except ZoneInfoNotFoundError as err:
+        # Windows has no system time zone database; the ``tzdata`` package supplies one.
+        raise TariffError(
+            f"The time zone database has no {name!r}; install the 'tzdata' package"
+        ) from err
+
 
 KIND_IMPORT = "import"
 KIND_EXPORT = "export"
@@ -101,6 +152,17 @@ class TariffVersion:
     supply_c_per_day: float = 0.0
     discount_pct: float = 0.0
     prices_include_gst: bool = True
+    timezone: str | None = None  # IANA name from ALLOWED_TIMEZONES; None = fixed AEST
+
+    @property
+    def tzinfo(self) -> tzinfo:
+        """Return the clock this version's windows and days are read on."""
+        return zone_for(self.timezone)
+
+    @property
+    def zone_name(self) -> str:
+        """Return the zone as shown to the user: the stored name, or Brisbane for fixed AEST."""
+        return self.timezone or LEGACY_TIMEZONE
 
     def periods(self, kind: str) -> tuple[Period, ...]:
         """Return the import or export periods."""
@@ -122,6 +184,11 @@ class TariffVersion:
     def validate(self) -> None:
         """Raise TariffError if this version is not a complete, consistent price list."""
         label = f"Tariff from {self.effective_from.isoformat()}"
+        if self.timezone is not None and self.timezone not in ALLOWED_TIMEZONES:
+            raise TariffError(
+                f"{label}: time zone {self.timezone!r} is not available; choose one of "
+                + ", ".join(ALLOWED_TIMEZONES)
+            )
         _check_number(self.supply_c_per_day, f"{label}: supply charge", minimum=0)
         _check_number(self.discount_pct, f"{label}: discount", minimum=0, maximum=100)
         if not self.import_periods:
@@ -137,6 +204,16 @@ class Tariff:
     """Every version of a user's tariff, oldest first."""
 
     versions: tuple[TariffVersion, ...]
+
+    @property
+    def tzinfo(self) -> tzinfo:
+        """Return the tariff's clock (every version shares one; see ``validate``)."""
+        return self.versions[0].tzinfo if self.versions else MARKET_TZ
+
+    @property
+    def zone_name(self) -> str:
+        """Return the tariff's zone name as shown to the user."""
+        return self.versions[0].zone_name if self.versions else LEGACY_TIMEZONE
 
     def version_for(self, day: date) -> TariffVersion:
         """Return the version in force on a date; the first covers all earlier dates."""
@@ -159,6 +236,11 @@ class Tariff:
             raise TariffError("Tariff versions must have distinct effective dates, oldest first")
         for version in self.versions:
             version.validate()
+        if len({version.zone_name for version in self.versions}) > 1:
+            raise TariffError(
+                "Every tariff version must use the same time zone (the retailer's clock does not "
+                "change when prices do); set the zone once for the whole tariff"
+            )
 
     # --- Serialisation -----------------------------------------------------------
 
@@ -187,15 +269,20 @@ class Tariff:
 # --- Time helpers -------------------------------------------------------------------
 
 
-def local_day(moment: datetime) -> date:
-    """Return which AEST (market-time) day an aware moment falls in."""
-    return moment.astimezone(MARKET_TZ).date()
+def local_day(moment: datetime, tz: tzinfo = MARKET_TZ) -> date:
+    """Return which day an aware moment falls in on a clock (default AEST, market time)."""
+    return moment.astimezone(tz).date()
 
 
-def local_day_hours(day: date) -> list[datetime]:
-    """Return the UTC start of each of the 24 hours of an AEST day."""
-    start = datetime.combine(day, time(0), tzinfo=MARKET_TZ).astimezone(UTC)
-    return [start + timedelta(hours=i) for i in range(24)]
+def local_day_hours(day: date, tz: tzinfo = MARKET_TZ) -> list[datetime]:
+    """Return the UTC start of each hour of a local day: 24, or 23/25 when the clock changes.
+
+    Australian daylight saving changes at 2am or 3am, so local midnight always exists and is
+    unambiguous. The offsets are whole hours, so the day is a whole number of hours long.
+    """
+    start = datetime.combine(day, time(0), tzinfo=tz).astimezone(UTC)
+    end = datetime.combine(day + timedelta(days=1), time(0), tzinfo=tz).astimezone(UTC)
+    return [start + timedelta(hours=i) for i in range(round((end - start) / timedelta(hours=1)))]
 
 
 # --- Slots and validation ---------------------------------------------------------
@@ -381,12 +468,13 @@ def _price_day(
     if problems:
         raise TariffError(f"Cannot price {kind} usage: {problems[0]}")
 
+    tz = tariff.tzinfo
     used: dict[int, float] = {}
     rows: list[tuple[datetime, str, float, float]] = []
     for moment, kwh in _normalise_hours(hours):
-        if local_day(moment) != day:
+        if local_day(moment, tz) != day:
             raise TariffError(f"{moment.isoformat()} is not in local day {day.isoformat()}")
-        local = moment.astimezone(MARKET_TZ)
+        local = moment.astimezone(tz)
         index = owners[local.weekday() * 24 + local.hour]
         charged = max(kwh, 0.0)
         cents = _tier_cents(periods[index].tiers, used.get(index, 0.0), charged)
@@ -504,7 +592,7 @@ def _normalise_hours(hours: Mapping[datetime, float]) -> list[tuple[datetime, fl
 
 
 def _version_to_dict(version: TariffVersion) -> dict[str, Any]:
-    return {
+    data: dict[str, Any] = {
         "effective_from": version.effective_from.isoformat(),
         "prices_include_gst": version.prices_include_gst,
         "supply_c_per_day": version.supply_c_per_day,
@@ -512,6 +600,11 @@ def _version_to_dict(version: TariffVersion) -> dict[str, Any]:
         "import_periods": [_period_to_dict(p) for p in version.import_periods],
         "export_periods": [_period_to_dict(p) for p in version.export_periods],
     }
+    # Left out when unset so a tariff stored before the option existed round-trips unchanged
+    # and keeps meaning fixed AEST until the user saves a choice.
+    if version.timezone is not None:
+        data["timezone"] = version.timezone
+    return data
 
 
 def _period_to_dict(period: Period) -> dict[str, Any]:
@@ -573,12 +666,18 @@ def _version_from_dict(raw: Any) -> TariffVersion:
             raise TariffError(f"effective_from {effective!r} is not a YYYY-MM-DD date") from err
     if not isinstance(effective, date):
         raise TariffError("Each tariff version needs an effective_from date")
-    # Times are always AEST (NEM time). Refuse the key rather than quietly ignore it, so a
-    # tariff written for a wall-clock mode cannot be priced on the wrong clock.
+    # ``timezone_mode`` belonged to an earlier design that never shipped. Refuse it rather than
+    # quietly ignore it, so a tariff written for it cannot be priced on the wrong clock.
     if "timezone_mode" in data:
         raise TariffError(
-            "timezone_mode is not supported: tariff times are always AEST (NEM time, UTC+10)"
+            "timezone_mode is not supported: set 'timezone' to a zone name such as "
+            "'Australia/Melbourne' (or leave it out for fixed AEST)"
         )
+    zone = data.get("timezone")
+    if zone is not None:
+        if not isinstance(zone, str):
+            raise TariffError("timezone must be a zone name such as 'Australia/Melbourne'")
+        zone = "GMT" if zone == "UTC" else zone  # one spelling is stored
     gst = data.get("prices_include_gst", True)
     if not isinstance(gst, bool):
         raise TariffError("prices_include_gst must be true or false")
@@ -589,6 +688,7 @@ def _version_from_dict(raw: Any) -> TariffVersion:
         discount_pct=_number(data.get("discount_pct", 0.0), "discount_pct"),
         import_periods=_periods_from(data.get("import_periods"), "import_periods"),
         export_periods=_periods_from(data.get("export_periods"), "export_periods"),
+        timezone=zone,
     )
 
 
@@ -639,6 +739,7 @@ def flat_tariff(
     export_c_per_kwh: float | None = None,
     discount_pct: float = 0.0,
     prices_include_gst: bool = True,
+    timezone: str | None = None,
 ) -> Tariff:
     """Build the simplest tariff: one all-day import rate and optionally one export rate."""
 
@@ -656,13 +757,17 @@ def flat_tariff(
                 supply_c_per_day=supply_c_per_day,
                 discount_pct=discount_pct,
                 prices_include_gst=prices_include_gst,
+                timezone=timezone,
             ),
         )
     )
 
 
 __all__ = [
+    "ALLOWED_TIMEZONES",
+    "DEFAULT_TIMEZONE",
     "KIND_EXPORT",
+    "LEGACY_TIMEZONE",
     "KIND_IMPORT",
     "HourCost",
     "Kind",
@@ -680,4 +785,5 @@ __all__ = [
     "local_day_hours",
     "period_slug",
     "period_slugs",
+    "zone_for",
 ]
