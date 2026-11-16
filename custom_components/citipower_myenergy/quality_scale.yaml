@@ -8,19 +8,19 @@
 # Statuses: done (followed), todo (not yet), exempt (does not apply; a comment says why).
 # A tier is earned only when every rule of that tier and of the tiers below is done or exempt.
 #
-# Graded 16 Nov 2026. Every Bronze rule is done or exempt, so Bronze is met on this self-audit.
-# Silver is blocked only by test-coverage (every module over 95%); Gold also by
-# docs-supported-devices, entity-translations, exception-translations and icon-translations;
-# Platinum by strict-typing. tests/test_quality_scale.py keeps this file's structure honest
-# (every rule present once, valid statuses, a reason for every exemption).
+# Graded 16 Nov 2026. Every Bronze and Silver rule is done or exempt, so Silver is met on this
+# self-audit. Gold is blocked by docs-supported-devices, entity-translations,
+# exception-translations and icon-translations; Platinum also by strict-typing.
+# tests/test_quality_scale.py keeps this file's structure honest (every rule present once, valid
+# statuses, a reason for every exemption, and a manifest tier the audit supports).
 #
 # Manifest state and what moving up a tier needs:
-#   - manifest.json has "quality_scale": "bronze" (after "issue_tracker", before "requirements":
+#   - manifest.json has "quality_scale": "silver" (after "issue_tracker", before "requirements":
 #     hassfest wants domain, name, then the rest alphabetically). Accepted values are bronze,
 #     silver, gold, platinum, internal, legacy, custom and no_score.
 #   - "codeowners" lists an owner, which Silver and above require (integration-owner).
-#   - To claim Silver: change the key to "silver" in the same change that gets test-coverage to
-#     done, and run hassfest (Gitea or GitHub) before tagging.
+#   - To claim Gold: change the key to "gold" in the same change that gets every Gold rule to
+#     done or exempt, and run hassfest (Gitea or GitHub) before tagging.
 #   - hassfest validates this file once the key is set: every rule slug must be present and
 #     spelled exactly, a status must be one of the three, and every exempt rule needs a comment.
 
@@ -116,8 +116,8 @@ rules:
     status: done
     comment: async_step_reauth and reauth_confirm, tested, including a different account being refused.
   test-coverage:
-    status: todo
-    comment: Total coverage is about 92% and several modules are under 95% (api.py, aura.py, auth.py, exceptions.py, models.py, portal.py, nem12.py, repairs.py). api.py and aura.py need HTTP-level tests.
+    status: done
+    comment: Every module is over 95% with branch coverage on (total 98%, lowest module 95.8%). The tests job in .github/workflows/validate.yml measures it on every run and fails if any module drops under the bar (scripts/coverage_summary.py).
 
   # --- Gold ----------------------------------------------------------------------------
   devices:

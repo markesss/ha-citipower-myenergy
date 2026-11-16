@@ -760,8 +760,9 @@ Graded against the Home Assistant Integration Quality Scale (54 rules). This is 
 integration, and the scale's pages are written for core ones and never mention custom
 integrations, so it is a self-audit: Home Assistant does not enforce it for
 `custom_components`, but hassfest does read it once the manifest has a `quality_scale` key. The
-manifest says `"bronze"`, and hassfest accepted the key and the file in a Gitea run on 16 Nov
-2026 (hassfest and ruff + pytest passed; HACS is skipped on Gitea). The result is kept in `custom_components/citipower_myenergy/quality_scale.yaml` (all 54 rules, status and a
+manifest first said `"bronze"` and hassfest accepted the key and the file in a Gitea run on
+16 Nov 2026 (hassfest and ruff + pytest passed; HACS is skipped on Gitea); it now says `"silver"`
+(see Silver below). The result is kept in `custom_components/citipower_myenergy/quality_scale.yaml` (all 54 rules, status and a
 reason each), and `tests/test_quality_scale.py` checks its structure (every rule once, valid
 statuses, a reason for every exemption, Bronze with no todo).
 - [x] **Manifest tier:** `"quality_scale": "bronze"` is set (hassfest key order: domain and name
@@ -789,12 +790,28 @@ statuses, a reason for every exemption, Bronze with no todo).
 - [x] **Silver, done 16 Nov 2026:** `integration-owner` (`codeowners` is `["@markesss"]`) and
       `parallel-updates` (`PARALLEL_UPDATES = 0` in `sensor.py` because the sensors only read held
       data, `1` in `button.py` because a press polls the portal; a test pins both).
-- [ ] **Silver, still open:** `test-coverage` (every module over 95%). Re-measure first: this
-      list is from the audit, before the config-flow tests and the repairs change. At the audit,
-      under 95%: `api.py` 56%,
-      `aura.py` 57%, `auth.py` 81%, `exceptions.py` 82%, `models.py` 87%, `repairs.py` 88%,
-      `portal.py` 89%, `nem12.py` 92% (and `config_flow.py`, since fixed). Total 92%. `api.py` and
-      `aura.py` are HTTP code with no HTTP-level tests, which is the large piece.
+- [x] **Silver `test-coverage`, done 16 Nov 2026:** every module is over 95% with branch coverage
+      on (total 98%, 789 tests; lowest module `session_store.py` at 95.8%). Re-measured on HEAD
+      first: `api.py` 50%, `aura.py` 55%, `auth.py` 77%, `exceptions.py` 82%, `models.py` 81%,
+      `repairs.py` 88%, `portal.py` 84%, `nem12.py` 90%, `tariff_flow.py` 94.9% (it printed 95%).
+      New: a `serve` fixture (a local aiohttp server) in `tests/conftest.py`,
+      `test_ha_aura.py`, `test_ha_api.py`, `test_ha_repairs.py`, `test_portal_errors.py`,
+      `test_models_edges.py`, and extensions to `test_ha_auth.py` and `test_ha_options_flow.py`.
+      24 mutations of a scratch copy were tried and 23 caught (the survivor was an equivalent
+      mutant). No coverage exclusions. As before, no real wrong-password or wrong-code portal
+      response exists, so those tests prove control flow only.
+- [x] **Coverage in CI:** the `tests` job in `.github/workflows/validate.yml` runs pytest with
+      coverage, prints a per-module table (`scripts/coverage_summary.py`, also added to the
+      GitHub job summary), fails if any module is under `MIN_COVERAGE_PERCENT` (95), and uploads
+      the HTML and XML reports on GitHub only (upload-artifact v4 is not supported by Gitea).
+      The manifest tier is `"silver"`; hassfest accepts the key and file (see above).
+- [ ] **Found by the coverage work, not fixed (need a code change):** (1) the Repairs fix flow
+      clears the guard's recorded failures before repricing, so a failed repricing aborts as
+      `repair_failed` with the notice already gone until a later check finds the break again
+      (`tests/test_ha_repairs.py` pins the current behaviour); (2) `MyEnergyAuraClient.async_invoke`
+      has an `if held is None: raise` branch that looks unreachable; (3) `async_send_code` keeps
+      the verification id and registration flag after raising on `isRegistration`, so a later
+      `async_verify_code` would still be sent (harmless: the config flow stops there).
 - [ ] **Gold:** `docs-supported-devices` (a section on supported networks and meters),
       `entity-translations` (the latest-day sensor sets its name in Python),
       `exception-translations` (no `exceptions` section in `strings.json`; the button and the

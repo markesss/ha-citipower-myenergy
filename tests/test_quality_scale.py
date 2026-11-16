@@ -90,10 +90,21 @@ def test_bronze_is_met(rules: dict) -> None:
     assert open_rules == []
 
 
-def test_silver_is_not_claimed_while_rules_are_open(rules: dict) -> None:
-    """A tier needs every rule below it too. Update this when Silver is genuinely met."""
+def test_silver_is_met(rules: dict) -> None:
+    """The manifest claims Silver; this fails if a Silver rule goes back to todo."""
     open_rules = [slug for slug in SILVER if _status(rules[slug]) == "todo"]
-    assert open_rules == ["test-coverage"]
+    assert open_rules == []
+
+
+def test_gold_is_not_claimed_while_rules_are_open(rules: dict) -> None:
+    """A tier needs every rule below it too. Update this when Gold is genuinely met."""
+    open_rules = [slug for slug in GOLD if _status(rules[slug]) == "todo"]
+    assert open_rules == [
+        "docs-supported-devices",
+        "entity-translations",
+        "exception-translations",
+        "icon-translations",
+    ]
 
 
 def test_the_manifest_tier_is_one_the_audit_supports(rules: dict) -> None:
