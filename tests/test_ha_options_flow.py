@@ -23,7 +23,7 @@ from custom_components.citipower_myenergy.const import (
     CONF_TARIFF,
     DOMAIN,
 )
-from custom_components.citipower_myenergy.exceptions import MyEnergyError
+from custom_components.citipower_myenergy.exceptions import MyEnergyError, TariffError
 from custom_components.citipower_myenergy.session_store import SessionStore
 from custom_components.citipower_myenergy.tariff import (
     ALLOWED_TIMEZONES,
@@ -1077,3 +1077,121 @@ async def test_the_keepalive_step_keeps_the_supply_mode(
     result = await go(hass, result, {CONF_KEEPALIVE_MINUTES: 30})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_SUPPLY_MODE] == "spread"
+
+
+# --- Branches the menus cannot reach ----------------------------------------------------------
+#
+# The menu only offers a step when its precondition holds, and Home Assistant refuses a menu
+# answer that is not offered. These steps still guard themselves (a stored tariff can be edited
+# or removed while a flow is open, and a draft can be damaged), so they are driven directly on a
+# flow object to pin what each guard does.
+
+
+def direct_flow(hass: HomeAssistant, entry: MockConfigEntry):
+    from custom_components.citipower_myenergy.config_flow import MyEnergyOptionsFlow
+
+    flow = MyEnergyOptionsFlow()
+    flow.hass = hass
+    flow.handler = entry.entry_id
+    flow.flow_id = "direct"
+    return flow
+
+
+@pytest.mark.parametrize(
+    "step",
+    [
+        "tariff_edit_latest",
+        "tariff_add_version",
+        "tariff_recalculate",
+        "tariff_period_stats",
+        "tariff_supply_mode",
+        "tariff_timezone_changed",  # reached with no new tariff waiting for an answer
+    ],
+)
+async def test_a_step_that_needs_a_tariff_sends_the_user_to_the_tariff_menu_without_one(
+    hass: HomeAssistant, step: str
+) -> None:
+    entry = make_entry(hass)  # nothing stored
+
+    result = await getattr(direct_flow(hass, entry), f"async_step_{step}")()
+
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "tariff"
+    assert entry.options == {}
+
+
+async def test_the_supply_step_without_held_back_options_starts_over(hass: HomeAssistant) -> None:
+    """Reached other than through the per-period step, there is nothing to save: start again."""
+    entry = make_entry(hass, {CONF_TARIFF: stored(glohome_version())})
+
+    result = await direct_flow(hass, entry).async_step_tariff_supply_mode()
+
+    assert result["step_id"] == "tariff"
+    assert CONF_SUPPLY_MODE not in entry.options
+
+
+async def test_choosing_a_period_when_there_are_none_goes_back_to_the_periods_menu(
+    hass: HomeAssistant,
+) -> None:
+    flow = direct_flow(hass, make_entry(hass))
+    flow._draft = form.new_version_dict(date(2026, 10, 28))  # no periods yet
+
+    for step in (flow.async_step_period_edit, flow.async_step_period_delete):
+        result = await step()
+        assert result["type"] is FlowResultType.MENU
+        assert result["step_id"] == "tariff_import_periods"
+
+
+async def test_saving_a_damaged_draft_returns_to_the_review_and_stores_nothing(
+    hass: HomeAssistant,
+) -> None:
+    entry = make_entry(hass)
+    flow = direct_flow(hass, entry)
+    draft = glohome_version()
+    draft["import_periods"] = draft["import_periods"][:2]  # the gap review would have caught
+    flow._draft = draft
+
+    result = await flow.async_step_review_save()
+
+    assert result["type"] is FlowResultType.MENU
+    assert result["step_id"] == "tariff_review"
+    assert result["menu_options"] == ["review_back"]
+    assert entry.options == {}
+
+
+async def test_the_pricing_day_falls_back_to_market_time_when_the_draft_clock_is_unknown(
+    hass: HomeAssistant, freezer
+) -> None:
+    # 23:30 on 1 Nov in AEST is already 2 Nov in Melbourne (daylight saving), so the two clocks
+    # give different dates and only a fallback to fixed AEST yields the first.
+    freezer.move_to("2026-11-01 13:30:00+00:00")
+    flow = direct_flow(hass, make_entry(hass))
+
+    flow._draft = {"timezone": "Australia/Melbourne"}
+    assert flow._today() == date(2026, 11, 2)
+    flow._draft = {"timezone": "Mars/Olympus_Mons"}
+    assert flow._today() == date(2026, 11, 1)
+
+
+@pytest.mark.parametrize("error", [MyEnergyError("boom"), TariffError("bad tariff")])
+async def test_a_failed_recalculation_shows_the_form_again_and_changes_nothing(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    custom_integration,
+    hass_storage,
+    caplog: pytest.LogCaptureFixture,
+    error: Exception,
+) -> None:
+    entry = make_entry(hass, {CONF_TARIFF: stored(glohome_version())})
+    await SessionStore(hass).async_save_suffixes(entry.entry_id, ["E1"])
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_recalculate")
+
+    with patch(RECALC, AsyncMock(side_effect=error)):
+        result = await go(hass, result, {"from_date": "2026-11-01"})
+
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "tariff_recalculate"
+    assert result["errors"] == {"base": "recalculate_failed"}
+    assert "Could not recalculate the cost history" in caplog.text
+    assert entry.options[CONF_TARIFF] == stored(glohome_version())

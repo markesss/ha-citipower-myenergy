@@ -38,6 +38,48 @@ else:
 if HAS_HA:
 
     @pytest.fixture
+    async def serve(socket_enabled, monkeypatch):
+        """Start a local aiohttp server for the portal's routes and point the client at it.
+
+        ``serve(routes)`` takes ``(method, path, handler)`` tuples and returns the server's origin.
+        The portal's URLs live in module globals, so they are patched in every module that
+        imported them by name. ``socket_enabled`` lifts the test package's socket ban; the server
+        only listens on loopback.
+        """
+        from aiohttp import web
+        from aiohttp.test_utils import TestServer
+
+        from custom_components.citipower_myenergy import api, aura, auth
+
+        servers: list[TestServer] = []
+
+        async def _serve(routes) -> str:
+            app = web.Application()
+            for method, path, handler in routes:
+                app.router.add_route(method, path, handler)
+            server = TestServer(app)
+            await server.start_server()
+            servers.append(server)
+            origin = str(server.make_url("")).rstrip("/")
+            for module in (aura, auth, api):
+                for name, path in (
+                    ("BASE_URL", ""),
+                    ("AURA_ENDPOINT", "/s/sfsites/aura"),
+                    ("LOGIN_PAGE", "/s/login/"),
+                    ("HOME_PAGE", "/s/"),
+                    ("USAGE_PAGE", "/s/energy-usage"),
+                    ("REMOTING_ENDPOINT", "/apexremote"),
+                    ("SESSION_TIME_URL", "/session"),
+                ):
+                    if hasattr(module, name):
+                        monkeypatch.setattr(module, name, f"{origin}{path}")
+            return origin
+
+        yield _serve
+        for server in servers:
+            await server.close()
+
+    @pytest.fixture
     def custom_integration(enable_custom_integrations):
         """Make the custom component loadable (not autouse: recorder tests
         must set up the database before hass exists)."""
