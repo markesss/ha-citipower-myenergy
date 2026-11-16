@@ -22,13 +22,19 @@ from custom_components.citipower_myenergy.const import (
     CONF_TARIFF,
     DOMAIN,
 )
+from custom_components.citipower_myenergy.exceptions import MyEnergyError
 from custom_components.citipower_myenergy.session_store import SessionStore
-from custom_components.citipower_myenergy.tariff import Tariff, flat_tariff
+from custom_components.citipower_myenergy.tariff import (
+    ALLOWED_TIMEZONES,
+    Tariff,
+    flat_tariff,
+)
 
 NMI = "61020000001"
 
 BASICS = {
     "effective_from": "2026-10-28",
+    "timezone": "Australia/Melbourne",  # the default for a new tariff
     "prices_include_gst": True,
     "supply_c_per_day": 92.40,
     "discount_pct": 3.0,
@@ -50,6 +56,15 @@ def glohome_version(effective_from: str = "2026-10-28") -> dict[str, Any]:
 def stored(*versions: dict[str, Any]) -> dict[str, Any]:
     """Return a stored tariff dict for the given version dicts."""
     return form.build_tariff(list(versions)).to_dict()
+
+
+def legacy_tariff() -> dict[str, Any]:
+    """A tariff stored before the timezone option existed: no ``timezone`` key anywhere."""
+    tariff = stored(glohome_version())
+    for version in tariff["versions"]:
+        del version["timezone"]
+    Tariff.from_dict(tariff)  # still valid, and means fixed AEST
+    return tariff
 
 
 def tiered_version() -> dict[str, Any]:
@@ -174,7 +189,11 @@ async def test_flat_rate_flow_saves_a_valid_tariff(
     assert result["type"] is FlowResultType.CREATE_ENTRY
 
     expected = flat_tariff(
-        30.0, effective_from=date(2026, 11, 1), supply_c_per_day=92.40, discount_pct=3.0
+        30.0,
+        effective_from=date(2026, 11, 1),
+        supply_c_per_day=92.40,
+        discount_pct=3.0,
+        timezone="Australia/Melbourne",
     )
     assert entry.options[CONF_TARIFF] == expected.to_dict()
     assert entry.options[CONF_KEEPALIVE_MINUTES] == 20  # untouched
@@ -342,7 +361,9 @@ async def test_add_a_new_version_copies_the_latest(
     entry = make_entry(hass, {CONF_TARIFF: stored(first)})
     result = await open_tariff_menu(hass, entry)
     assert result["description_placeholders"]["summary"] == (
-        "- From **2026-10-28**: 3 import periods, supply 92.40 c/day"
+        "- From **2026-10-28**: 3 import periods, supply 92.40 c/day\n"
+        "\n"
+        "Clock: Melbourne (AEST/AEDT, follows daylight saving)"
     )
     result = await pick(hass, result, "tariff_add_version")
     assert result["step_id"] == "tariff_basics"
@@ -575,6 +596,8 @@ async def test_period_statistics_step_shows_the_adjustment_and_the_ids(
     assert result["step_id"] == "tariff_period_stats"
     details = result["description_placeholders"]["details"]
     assert f"{hass.config.currency} 0.89628" in details
+    assert "for reference only" in details  # the dashboard does not add it in this mode
+    assert "to enter" not in details
     for slug in ("peak", "off_peak", "shoulder"):
         assert f"citipower_myenergy:{NMI}_e1_{slug}`" in details
         assert f"citipower_myenergy:{NMI}_e1_{slug}_cost`" in details
@@ -632,3 +655,217 @@ async def test_recalculate_rewrites_period_statistics_only_when_the_option_is_on
     with patch("custom_components.citipower_myenergy.tariff_flow.async_recalculate_costs", recalc):
         await go(hass, result, {"from_date": "2026-11-01"})
     assert recalc.await_args.kwargs == {"period_statistics": enabled}
+
+
+# --- The pricing clock ----------------------------------------------------------------------
+
+
+def basics_markers(result: dict[str, Any]) -> dict[str, Any]:
+    return {str(marker): marker for marker in result["data_schema"].schema}
+
+
+async def test_basics_offers_exactly_the_allowed_zones_defaulting_to_melbourne(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass)
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_setup")
+    result = await go(hass, result, {"tariff_type": "tou"})
+    assert result["step_id"] == "tariff_basics"
+    markers = basics_markers(result)
+    assert markers["timezone"].default() == "Australia/Melbourne"
+    selector = result["data_schema"].schema[markers["timezone"]]
+    options = selector.config["options"]
+    assert [option["value"] for option in options] == list(ALLOWED_TIMEZONES)
+    assert options[0]["label"] == "Melbourne (AEST/AEDT, follows daylight saving)"
+    assert options[4]["label"] == "Brisbane (AEST, no daylight saving; NEM time)"
+    placeholders = result["description_placeholders"]
+    assert "Adelaide" in placeholders["timezone_help"]
+    assert placeholders["timezone_state"] == ""  # a new tariff has nothing stored to explain
+
+
+async def test_a_stored_tariff_with_no_zone_shows_as_brisbane_and_stays_unwritten(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    tariff = legacy_tariff()
+    entry = make_entry(hass, {CONF_TARIFF: tariff})
+    result = await open_tariff_menu(hass, entry)
+    assert result["description_placeholders"]["summary"].endswith(
+        "Clock: Brisbane (AEST, no daylight saving; NEM time)"
+    )
+    result = await pick(hass, result, "tariff_edit_latest")
+    assert result["step_id"] == "tariff_basics"
+    assert basics_markers(result)["timezone"].default() == "Australia/Brisbane"
+    assert "fixed AEST" in result["description_placeholders"]["timezone_state"]
+
+    # Keeping Brisbane is not a change: nothing is written back and no question is asked.
+    result = await go(hass, result, {**BASICS, "timezone": "Australia/Brisbane"})
+    assert result["step_id"] == "tariff_import_periods"
+    assert "Brisbane clock" in result["description_placeholders"]["timezone"]
+    result = await pick(hass, result, "periods_done")
+    result = await pick(hass, result, "review_save")
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_TARIFF] == tariff
+    assert "timezone" not in entry.options[CONF_TARIFF]["versions"][0]
+
+
+async def test_every_step_that_shows_times_names_the_chosen_clock(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass)
+    result = await start_time_of_use(hass, entry)
+    assert "Melbourne clock" in result["description_placeholders"]["timezone"]
+    assert "not Home Assistant's own timezone" in result["description_placeholders"]["timezone"]
+    result = await pick(hass, result, "period_add")
+    assert "Melbourne clock" in result["description_placeholders"]["timezone"]
+    result = await go(hass, result, {"name": "All day", "rate": 20.0, "windows": "0-24"})
+    result = await pick(hass, result, "period_edit")
+    assert "Melbourne clock" in result["description_placeholders"]["timezone"]
+    result = await go(hass, result, {"period": "All day"})
+    assert "Melbourne clock" in result["description_placeholders"]["timezone"]
+    result = await go(hass, result, {"name": "All day", "rate": 20.0, "windows": "0-24"})
+    result = await pick(hass, result, "period_delete")
+    assert "Melbourne clock" in result["description_placeholders"]["timezone"]
+    result = await go(hass, result, {"period": "All day"})
+    result = await add_glohome_periods(hass, result)
+    result = await pick(hass, result, "periods_done")
+    placeholders = result["description_placeholders"]
+    assert result["step_id"] == "tariff_review"
+    assert "Melbourne clock" in placeholders["timezone"]
+    assert placeholders["hour_map"].startswith(
+        "**Import hours: Melbourne (AEST/AEDT, follows daylight saving)**"
+    )
+    assert "23 or 25 hours" in placeholders["hour_map"]
+
+
+async def test_changing_the_clock_asks_and_reprices_all_history_before_saving(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass, {CONF_TARIFF: legacy_tariff(), CONF_PERIOD_STATS: True})
+    await SessionStore(hass).async_save_suffixes(entry.entry_id, ["E1"])
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_edit_latest")
+    result = await go(hass, result, BASICS)  # Melbourne, was fixed AEST
+    result = await pick(hass, result, "periods_done")
+    result = await pick(hass, result, "review_save")
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "tariff_timezone_changed"
+    assert result["description_placeholders"] == {
+        "old_clock": "Brisbane (AEST, no daylight saving; NEM time)",
+        "new_clock": "Melbourne (AEST/AEDT, follows daylight saving)",
+    }
+    # Nothing is saved until the question is answered.
+    assert "timezone" not in entry.options[CONF_TARIFF]["versions"][0]
+    (marker,) = result["data_schema"].schema
+    assert marker.default() is True
+
+    recalc = AsyncMock(return_value=10)
+    with patch("custom_components.citipower_myenergy.tariff_flow.async_recalculate_costs", recalc):
+        result = await go(hass, result, {"reprice_history": True})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_TARIFF]["versions"][0]["timezone"] == "Australia/Melbourne"
+    recalc.assert_awaited_once()
+    args = recalc.await_args.args
+    assert args[3] == "E1"
+    assert args[4].zone_name == "Australia/Melbourne"  # priced on the NEW clock
+    assert args[5] == date(2000, 1, 1)  # from before any stored reading
+    assert recalc.await_args.kwargs == {"period_statistics": True}
+
+
+async def test_the_user_can_decline_the_repricing_and_still_save(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass, {CONF_TARIFF: legacy_tariff()})
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_edit_latest")
+    result = await go(hass, result, {**BASICS, "timezone": "Australia/Sydney"})
+    result = await pick(hass, result, "periods_done")
+    result = await pick(hass, result, "review_save")
+    recalc = AsyncMock()
+    with patch("custom_components.citipower_myenergy.tariff_flow.async_recalculate_costs", recalc):
+        result = await go(hass, result, {"reprice_history": False})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_TARIFF]["versions"][0]["timezone"] == "Australia/Sydney"
+    recalc.assert_not_awaited()
+
+
+async def test_a_failed_repricing_keeps_the_question_open_and_saves_nothing(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    tariff = legacy_tariff()
+    entry = make_entry(hass, {CONF_TARIFF: tariff})
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_edit_latest")
+    result = await go(hass, result, BASICS)
+    result = await pick(hass, result, "periods_done")
+    result = await pick(hass, result, "review_save")
+    recalc = AsyncMock(side_effect=MyEnergyError("boom"))
+    with patch("custom_components.citipower_myenergy.tariff_flow.async_recalculate_costs", recalc):
+        result = await go(hass, result, {"reprice_history": True})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "tariff_timezone_changed"
+    assert result["errors"] == {"base": "recalculate_failed"}
+    assert entry.options[CONF_TARIFF] == tariff
+    # Declining lets the user save anyway.
+    result = await go(hass, result, {"reprice_history": False})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_TARIFF]["versions"][0]["timezone"] == "Australia/Melbourne"
+
+
+async def test_a_new_tariff_with_nothing_stored_is_not_asked_about_history(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass)
+    result = await start_time_of_use(hass, entry)
+    result = await add_glohome_periods(hass, result)
+    result = await pick(hass, result, "periods_done")
+    result = await pick(hass, result, "review_save")
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_TARIFF]["versions"][0]["timezone"] == "Australia/Melbourne"
+
+
+async def test_the_clock_is_set_for_every_version_of_the_tariff(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    first = glohome_version("2026-10-28")
+    entry = make_entry(hass, {CONF_TARIFF: stored(first)})
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_add_version")
+    result = await go(
+        hass, result, {**BASICS, "effective_from": "2026-12-01", "timezone": "Australia/Perth"}
+    )
+    result = await pick(hass, result, "periods_done")
+    result = await pick(hass, result, "review_save")
+    assert result["step_id"] == "tariff_timezone_changed"  # Melbourne -> Perth
+    recalc = AsyncMock(return_value=0)
+    with patch("custom_components.citipower_myenergy.tariff_flow.async_recalculate_costs", recalc):
+        result = await go(hass, result, {"reprice_history": True})
+    versions = entry.options[CONF_TARIFF]["versions"]
+    assert [v["timezone"] for v in versions] == ["Australia/Perth", "Australia/Perth"]
+    Tariff.from_dict(entry.options[CONF_TARIFF])
+
+
+async def test_advanced_yaml_can_set_a_zone_and_rejects_one_that_is_not_offered(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass)
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_advanced")
+    adelaide = stored(glohome_version())
+    adelaide["versions"][0]["timezone"] = "Australia/Adelaide"
+    result = await go(hass, result, {"tariff": adelaide})
+    assert result["errors"] == {"tariff": "invalid_tariff"}
+    assert "not available" in result["description_placeholders"]["detail"]
+    assert "Melbourne" in result["description_placeholders"]["detail"]
+
+    mixed = stored(glohome_version("2026-01-01"), glohome_version("2026-10-28"))
+    mixed["versions"][1]["timezone"] = "GMT"
+    result = await go(hass, result, {"tariff": mixed})
+    assert result["errors"] == {"tariff": "invalid_tariff"}
+    assert "same time zone" in result["description_placeholders"]["detail"]
+
+    sydney = stored(glohome_version())
+    sydney["versions"][0]["timezone"] = "Australia/Sydney"
+    result = await go(hass, result, {"tariff": sydney})
+    assert result["type"] is FlowResultType.CREATE_ENTRY  # nothing stored before: no question
+    assert entry.options[CONF_TARIFF] == sydney

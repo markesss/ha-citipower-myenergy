@@ -100,15 +100,17 @@
       },
       "tariff_basics": {
         "title": "Tariff details",
-        "description": "Enter prices exactly as your retailer quotes them.\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "Enter prices exactly as your retailer quotes them.\n\n{timezone_help}\n\n{timezone_state}",
         "data": {
           "effective_from": "Rates apply from",
+          "timezone": "Pricing clock (timezone)",
           "prices_include_gst": "Prices include GST",
           "supply_c_per_day": "Daily supply charge",
           "discount_pct": "Pay-on-time discount"
         },
         "data_description": {
           "effective_from": "The first day these rates apply. Earlier days use the oldest rates you have entered.",
+          "timezone": "The clock your retailer's hours are read on. It applies to the whole tariff.",
           "prices_include_gst": "Turn this off if your prices are quoted before GST; 10% is added to import charges.",
           "supply_c_per_day": "In cents per day, charged on every day.",
           "discount_pct": "A percentage taken off supply and usage charges. It never applies to export credit."
@@ -116,14 +118,14 @@
       },
       "tariff_flat_rate": {
         "title": "Flat rate",
-        "description": "One price for every hour of the day.\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "One price for every hour of the day.\n\n{timezone}",
         "data": {
           "rate": "Usage rate"
         }
       },
       "tariff_import_periods": {
         "title": "Import rates",
-        "description": "Each period is a price and the hours it applies. Every hour of the week must belong to one period.\n\n{periods}\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "Each period is a price and the hours it applies. Every hour of the week must belong to one period.\n\n{periods}\n\n{timezone}",
         "menu_options": {
           "period_add": "Add a period",
           "period_edit": "Edit a period",
@@ -133,7 +135,7 @@
       },
       "tariff_export_periods": {
         "title": "Export rates",
-        "description": "What you are paid for energy sent back to the grid. Every hour of the week must belong to one period.\n\n{periods}\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "What you are paid for energy sent back to the grid. Every hour of the week must belong to one period.\n\n{periods}\n\n{timezone}",
         "menu_options": {
           "period_add": "Add a period",
           "period_edit": "Edit a period",
@@ -143,7 +145,7 @@
       },
       "period_add": {
         "title": "Add a period",
-        "description": "Windows are whole hours on a 24-hour clock, such as 16-21 (4pm to 9pm), or with am/pm such as 9pm-11am. An end at or before the start runs past midnight, and 0-24 is all day. Separate several windows with commas.\n\n{detail}\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "Windows are whole hours on a 24-hour clock, such as 16-21 (4pm to 9pm), or with am/pm such as 9pm-11am. An end at or before the start runs past midnight, and 0-24 is all day. Separate several windows with commas.\n\n{detail}\n\n{timezone}",
         "data": {
           "name": "Name",
           "rate": "Rate",
@@ -157,14 +159,14 @@
       },
       "period_edit": {
         "title": "Edit a period",
-        "description": "Choose the period to change.\n\n{periods}\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "Choose the period to change.\n\n{periods}\n\n{timezone}",
         "data": {
           "period": "Period"
         }
       },
       "period_edit_form": {
         "title": "Edit the period",
-        "description": "Windows are whole hours on a 24-hour clock, such as 16-21 (4pm to 9pm), or with am/pm such as 9pm-11am. An end at or before the start runs past midnight, and 0-24 is all day. Separate several windows with commas.\n\n{detail}\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "Windows are whole hours on a 24-hour clock, such as 16-21 (4pm to 9pm), or with am/pm such as 9pm-11am. An end at or before the start runs past midnight, and 0-24 is all day. Separate several windows with commas.\n\n{detail}\n\n{timezone}",
         "data": {
           "name": "Name",
           "rate": "Rate",
@@ -178,14 +180,14 @@
       },
       "period_delete": {
         "title": "Delete a period",
-        "description": "Choose the period to delete.\n\n{periods}\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "Choose the period to delete.\n\n{periods}\n\n{timezone}",
         "data": {
           "period": "Period"
         }
       },
       "tariff_review": {
         "title": "Check the tariff",
-        "description": "{problem}{hour_map}\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "{problem}{hour_map}\n\n{timezone}",
         "menu_options": {
           "review_save": "Save the tariff",
           "review_back": "Go back and change the periods"
@@ -193,14 +195,14 @@
       },
       "tariff_advanced": {
         "title": "Edit the tariff as YAML",
-        "description": "The whole tariff, for copy and paste and for things the guided steps do not cover, such as a per-day allowance (tiers). Window start and end are whole hours (0-24, end 24 is midnight) and days run from 0 (Monday) to 6 (Sunday).\n\n{detail}\n\nAll times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing clock, not Home Assistant's own timezone.",
+        "description": "The whole tariff, for copy and paste and for things the guided steps do not cover, such as a per-day allowance (tiers). Window start and end are whole hours (0-24, end 24 is midnight) and days run from 0 (Monday) to 6 (Sunday).\n\n{detail}\n\n{timezone}",
         "data": {
           "tariff": "Tariff"
         }
       },
       "tariff_period_stats": {
         "title": "Statistics per tariff period",
-        "description": "Gives every import period its own kWh and cost statistics, so the Energy dashboard can draw each period as its own grid source in its own colour. Turning this on works out your whole stored history, which can take a minute. The combined statistics are not changed.\n\n**To use them:**\n1. In Settings > Dashboards > Energy, add one grid consumption source per period below. For each, pick its kWh statistic and, under cost, choose \"Use an entity tracking the total costs\" and pick the matching cost statistic.\n2. Remove your combined grid source (or turn off its cost). Using it alongside these sources counts your energy and cost twice.\n3. These costs leave out the daily supply charge. Enter the amount below as the \"daily cost adjustment\" on one grid source only, and leave the others at 0. Home Assistant keeps an adjustment for each grid source, and I believe it adds each one to every day shown, so entering it on more than one source would count it more than once. After setting it, check one day: the dashboard's grid cost should equal the period costs plus this amount.\n\nThe adjustment is a fixed number. It does not follow your tariff, so when the supply charge or discount changes you must update it yourself. It also applies to every day the dashboard shows, including days before these rates started.\n\n{details}\n\nRenaming or removing a period stops its statistics being written but leaves the old ones in place; clear them in Developer Tools > Statistics if you no longer want them. Turning this off keeps everything already written.",
+        "description": "Gives every import period its own kWh and cost statistics, so the Energy dashboard can draw each period as its own grid source in its own colour. Turning this on works out your whole stored history, which can take a minute. The combined statistics are not changed.\n\n**To use them:**\n1. In Settings > Dashboards > Energy, add one grid consumption source per period below. For each, pick its kWh statistic and, under cost, choose \"Use an entity tracking the total costs\" and pick the matching cost statistic.\n2. Remove your combined grid source (or turn off its cost). Using it alongside these sources counts your energy and cost twice.\n3. These costs leave out the daily supply charge, and Home Assistant does not apply its daily cost adjustment to sources set up this way, so the supply charge will not appear in the dashboard's cost. Leave the daily cost adjustment at 0. To see your full cost including the supply charge, use the combined cost statistic instead (not these sources).\n\n{details}\n\nRenaming or removing a period stops its statistics being written but leaves the old ones in place; clear them in Developer Tools > Statistics if you no longer want them. Turning this off keeps everything already written.",
         "data": {
           "enabled": "Record statistics for each tariff period"
         }
@@ -210,6 +212,13 @@
         "description": "Rewrites the recorded cost for every day from this date using the rates now saved, working from the readings Home Assistant has already stored. Use it after correcting a rate that applied to past days.",
         "data": {
           "from_date": "Recalculate from"
+        }
+      },
+      "tariff_timezone_changed": {
+        "title": "Pricing clock changed",
+        "description": "You changed the pricing clock from {old_clock} to {new_clock}. The clock moves every time window and the edges of every day, so costs already recorded no longer match your rates.\n\nLeave the box ticked to recalculate all recorded costs now, from the readings Home Assistant holds (this can take a minute). If you untick it the tariff is still saved, but older days keep their old costs until you run \"Recalculate cost history\".",
+        "data": {
+          "reprice_history": "Recalculate cost history now"
         }
       }
     },

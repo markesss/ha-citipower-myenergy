@@ -27,6 +27,7 @@ from homeassistant.helpers.selector import (
     NumberSelectorConfig,
     NumberSelectorMode,
     ObjectSelector,
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -46,12 +47,22 @@ from .const import (
 from .exceptions import MyEnergyError, TariffError
 from .session_store import SessionStore
 from .statistics import async_recalculate_costs, period_statistic_ids
-from .tariff import KIND_EXPORT, KIND_IMPORT, Tariff, flat_tariff
+from .tariff import (
+    DEFAULT_TIMEZONE,
+    KIND_EXPORT,
+    KIND_IMPORT,
+    Tariff,
+    flat_tariff,
+    zone_for,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
 TYPE_FLAT = "flat"
 TYPE_TIME_OF_USE = "tou"
+
+# Reprice "all of history" when the clock changes: from before any stored reading.
+_FAR_PAST = date(2000, 1, 1)
 
 # Errors from reading hand-edited YAML: TariffError covers the model, the rest are shapes
 # the model never sees (a list where a mapping should be, and so on).
@@ -83,6 +94,7 @@ class TariffOptionsFlow(OptionsFlow):
         self._flat_setup = False
         self._export_applicable = False
         self._period_index: int | None = None
+        self._pending: Tariff | None = None  # saved once the user answers the clock-change step
 
     # --- Helpers ---------------------------------------------------------------------
 
@@ -99,7 +111,19 @@ class TariffOptionsFlow(OptionsFlow):
             return None
 
     def _today(self) -> date:
-        return dt_util.now(MARKET_TZ).date()
+        """Return today's date on the clock the draft prices on (new tariffs: the default)."""
+        try:
+            zone = zone_for(self._draft.get("timezone") or DEFAULT_TIMEZONE)
+        except TariffError:
+            zone = MARKET_TZ
+        return dt_util.now(zone).date()
+
+    def _clock_note(self) -> str:
+        """Return the sentence saying which clock the times on this step are on."""
+        if self._draft:
+            return form.timezone_note(form.draft_zone(self._draft))
+        tariff = self._stored_tariff()
+        return form.timezone_note(tariff.zone_name if tariff else DEFAULT_TIMEZONE)
 
     async def _async_prepare(self) -> None:
         """Decide whether export prices make sense: only for an account that exports."""
@@ -116,6 +140,14 @@ class TariffOptionsFlow(OptionsFlow):
     def _periods(self) -> list[dict[str, Any]]:
         return self._draft[form.periods_key(self._kind)]
 
+    async def _async_finish(self, tariff: Tariff) -> ConfigFlowResult:
+        """Save a tariff, first asking about history if it changed the pricing clock."""
+        previous = self._stored_tariff()
+        if previous is not None and previous.zone_name != tariff.zone_name:
+            self._pending = tariff
+            return await self.async_step_tariff_timezone_changed()
+        return self._save(tariff)
+
     def _save(self, tariff: Tariff | None) -> ConfigFlowResult:
         """Store the tariff beside the other options (keep-alive must survive)."""
         options = dict(self.config_entry.options)
@@ -129,6 +161,7 @@ class TariffOptionsFlow(OptionsFlow):
 
     async def async_step_tariff(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Show what is set and what can be done about it."""
+        self._draft = {}  # a stale draft from an earlier visit must not set the clock note
         tariff = self._stored_tariff()
         if tariff is not None:
             versions = tariff.to_dict()["versions"]
@@ -241,6 +274,8 @@ class TariffOptionsFlow(OptionsFlow):
                     supply_c_per_day=float(user_input["supply_c_per_day"]),
                     discount_pct=float(user_input["discount_pct"]),
                 )
+                # One clock for the whole tariff: a retailer's clock does not change with prices.
+                form.apply_timezone([*self._others, self._draft], user_input["timezone"])
                 if self._flat_setup:
                     return await self.async_step_tariff_flat_rate()
                 return await self.async_step_tariff_import_periods()
@@ -248,6 +283,15 @@ class TariffOptionsFlow(OptionsFlow):
         schema = vol.Schema(
             {
                 vol.Required("effective_from", default=values["effective_from"]): DateSelector(),
+                vol.Required("timezone", default=form.draft_zone(values)): SelectSelector(
+                    SelectSelectorConfig(
+                        options=[
+                            SelectOptionDict(value=value, label=label)
+                            for value, label in form.timezone_options()
+                        ],
+                        mode=SelectSelectorMode.DROPDOWN,
+                    )
+                ),
                 vol.Required(
                     "prices_include_gst", default=values.get("prices_include_gst", True)
                 ): BooleanSelector(),
@@ -275,7 +319,21 @@ class TariffOptionsFlow(OptionsFlow):
                 ),
             }
         )
-        return self.async_show_form(step_id="tariff_basics", data_schema=schema, errors=errors)
+        legacy = "timezone" not in self._draft and (self._others or self._stored_tariff())
+        return self.async_show_form(
+            step_id="tariff_basics",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "timezone_help": form.TIMEZONE_HELP,
+                "timezone_state": (
+                    "These rates have no clock chosen, so they use fixed AEST (the Brisbane "
+                    "option). Pick your retailer's clock to change that."
+                    if legacy
+                    else ""
+                ),
+            },
+        )
 
     async def async_step_tariff_flat_rate(
         self, user_input: dict[str, Any] | None = None
@@ -285,7 +343,11 @@ class TariffOptionsFlow(OptionsFlow):
             self._draft["import_periods"] = [form.flat_period(float(user_input["rate"]))]
             return await self._async_after_import()
         schema = vol.Schema({vol.Required("rate"): _rate_selector()})
-        return self.async_show_form(step_id="tariff_flat_rate", data_schema=schema)
+        return self.async_show_form(
+            step_id="tariff_flat_rate",
+            data_schema=schema,
+            description_placeholders={"timezone": self._clock_note()},
+        )
 
     # --- Periods ---------------------------------------------------------------------------
 
@@ -308,7 +370,10 @@ class TariffOptionsFlow(OptionsFlow):
         return self.async_show_menu(
             step_id=step_id,
             menu_options=options,
-            description_placeholders={"periods": form.describe_periods(periods)},
+            description_placeholders={
+                "periods": form.describe_periods(periods),
+                "timezone": self._clock_note(),
+            },
         )
 
     async def async_step_tariff_import_periods(
@@ -386,7 +451,10 @@ class TariffOptionsFlow(OptionsFlow):
             step_id=step_id,
             data_schema=schema,
             errors=errors,
-            description_placeholders={"periods": form.describe_periods(periods)},
+            description_placeholders={
+                "periods": form.describe_periods(periods),
+                "timezone": self._clock_note(),
+            },
         )
 
     def _parse_period_form(
@@ -451,7 +519,11 @@ class TariffOptionsFlow(OptionsFlow):
             step_id=step_id,
             data_schema=schema,
             errors=errors,
-            description_placeholders={"detail": detail, "kind": self._kind},
+            description_placeholders={
+                "detail": detail,
+                "kind": self._kind,
+                "timezone": self._clock_note(),
+            },
         )
 
     # --- Review and save ---------------------------------------------------------------
@@ -469,6 +541,7 @@ class TariffOptionsFlow(OptionsFlow):
             description_placeholders={
                 "problem": notice,
                 "hour_map": form.review_text(self._draft),
+                "timezone": self._clock_note(),
             },
         )
 
@@ -486,7 +559,7 @@ class TariffOptionsFlow(OptionsFlow):
             tariff = form.build_tariff(self._all_versions())
         except TariffError:
             return await self.async_step_tariff_review()
-        return self._save(tariff)
+        return await self._async_finish(tariff)
 
     # --- Advanced: the whole tariff as YAML -------------------------------------------
 
@@ -498,7 +571,7 @@ class TariffOptionsFlow(OptionsFlow):
         detail = ""
         if user_input is not None:
             try:
-                return self._save(Tariff.from_dict(user_input["tariff"]))
+                return await self._async_finish(Tariff.from_dict(user_input["tariff"]))
             except _BAD_INPUT as err:
                 errors["tariff"] = "invalid_tariff"
                 detail = str(err)
@@ -513,10 +586,67 @@ class TariffOptionsFlow(OptionsFlow):
             step_id="tariff_advanced",
             data_schema=schema,
             errors=errors,
-            description_placeholders={"detail": detail},
+            description_placeholders={"detail": detail, "timezone": self._clock_note()},
         )
 
     # --- Recalculate history ---------------------------------------------------------------
+
+    async def _async_reprice(self, tariff: Tariff, from_day: date) -> int:
+        """Reprice every priced channel's stored history from a day; return combined-cost hours."""
+        data = self.config_entry.data
+        name = data.get(CONF_DESCRIPTION) or data.get(CONF_ADDRESS) or data[CONF_NMI]
+        store = SessionStore(self.hass)
+        await store.async_load()
+        suffixes = store.suffixes(self.config_entry.entry_id) or ["E1"]
+        period_statistics = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
+        rows = 0
+        for suffix in suffixes:
+            rows += await async_recalculate_costs(
+                self.hass,
+                data[CONF_NMI],
+                name,
+                suffix,
+                tariff,
+                from_day,
+                period_statistics=period_statistics,
+            )
+        return rows
+
+    async def async_step_tariff_timezone_changed(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Say the pricing clock changed and reprice history on it, unless the user declines.
+
+        The clock moves every window and every day edge, so recorded costs are wrong until they
+        are recalculated. Doing it here, from the stored readings and before the options are
+        saved, means the reload that follows finds nothing left to change. Declining saves the
+        tariff anyway; "Recalculate cost history" can be run later.
+        """
+        tariff = self._pending
+        if tariff is None:
+            return await self.async_step_tariff()
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if user_input["reprice_history"]:
+                try:
+                    await self._async_reprice(tariff, _FAR_PAST)
+                except (TariffError, MyEnergyError) as err:
+                    _LOGGER.warning("Could not recalculate the cost history: %s", err)
+                    errors["base"] = "recalculate_failed"
+            if not errors:
+                self._pending = None
+                return self._save(tariff)
+        previous = self._stored_tariff()
+        schema = vol.Schema({vol.Required("reprice_history", default=True): BooleanSelector()})
+        return self.async_show_form(
+            step_id="tariff_timezone_changed",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={
+                "old_clock": form.timezone_label(previous.zone_name if previous else None),
+                "new_clock": form.timezone_label(tariff.zone_name),
+            },
+        )
 
     async def async_step_tariff_recalculate(
         self, user_input: dict[str, Any] | None = None
@@ -528,24 +658,8 @@ class TariffOptionsFlow(OptionsFlow):
         errors: dict[str, str] = {}
         if user_input is not None:
             from_day = date.fromisoformat(user_input["from_date"])
-            data = self.config_entry.data
-            name = data.get(CONF_DESCRIPTION) or data.get(CONF_ADDRESS) or data[CONF_NMI]
-            store = SessionStore(self.hass)
-            await store.async_load()
-            suffixes = store.suffixes(self.config_entry.entry_id) or ["E1"]
-            rows = 0
-            period_statistics = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
             try:
-                for suffix in suffixes:
-                    rows += await async_recalculate_costs(
-                        self.hass,
-                        data[CONF_NMI],
-                        name,
-                        suffix,
-                        tariff,
-                        from_day,
-                        period_statistics=period_statistics,
-                    )
+                rows = await self._async_reprice(tariff, from_day)
             except (TariffError, MyEnergyError) as err:
                 _LOGGER.warning("Could not recalculate the cost history: %s", err)
                 errors["base"] = "recalculate_failed"

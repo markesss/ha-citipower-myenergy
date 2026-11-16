@@ -9,11 +9,21 @@ from pathlib import Path
 import pytest
 
 from custom_components.citipower_myenergy import tariff_form as form
-from custom_components.citipower_myenergy.tariff import Tariff
+from custom_components.citipower_myenergy.tariff import (
+    ALLOWED_TIMEZONES,
+    DEFAULT_TIMEZONE,
+    LEGACY_TIMEZONE,
+    Tariff,
+)
+
+DST_NOTE = (
+    "_On the two days a year the clocks change a day has 23 or 25 hours; the hour that is "
+    "skipped or repeated is priced by the clock._"
+)
 
 PACKAGE = Path(__file__).resolve().parents[1] / "custom_components" / "citipower_myenergy"
 
-# Steps whose descriptions show or take times, and so must carry the AEST / NEM-time note.
+# Steps whose descriptions show or take times, and so must say which clock they are on.
 TIME_STEPS = (
     "tariff_basics",
     "tariff_flat_rate",
@@ -161,7 +171,19 @@ def test_describe_periods_marks_advanced_ones() -> None:
 
 def test_describe_versions() -> None:
     text = form.describe_versions([glohome()])
-    assert text == "- From **2026-10-28**: 3 import periods, supply 92.40 c/day"
+    assert text == (
+        "- From **2026-10-28**: 3 import periods, supply 92.40 c/day\n"
+        "\n"
+        "Clock: Melbourne (AEST/AEDT, follows daylight saving)"
+    )
+
+
+def test_describe_versions_shows_fixed_aest_for_a_tariff_with_no_zone() -> None:
+    version = glohome()
+    del version["timezone"]
+    assert form.describe_versions([version]).endswith(
+        "Clock: Brisbane (AEST, no daylight saving; NEM time)"
+    )
 
 
 # --- Hour map -----------------------------------------------------------------------------
@@ -174,7 +196,8 @@ def test_the_reference_monday_is_a_monday() -> None:
 def test_glohome_hour_map() -> None:
     text = form.review_text(glohome())
     assert text.splitlines() == [
-        "**Import hours (AEST, NEM time, UTC+10)**",
+        "**Import hours: Melbourne (AEST/AEDT, follows daylight saving)**",
+        DST_NOTE,
         "Every day:",
         "- 00:00–11:00 Off-peak (16.50 c/kWh)",
         "- 11:00–16:00 Shoulder (13.20 c/kWh)",
@@ -193,7 +216,8 @@ def test_hour_map_groups_days_that_differ() -> None:
     assert form.draft_problem([version]) is None
     lines = form.review_text(version).splitlines()
     assert lines == [
-        "**Import hours (AEST, NEM time, UTC+10)**",
+        "**Import hours: Melbourne (AEST/AEDT, follows daylight saving)**",
+        DST_NOTE,
         "Mon–Fri:",
         "- 00:00–09:00 Off-peak (15.00 c/kWh)",
         "- 09:00–17:00 Weekday peak (40.00 c/kWh)",
@@ -203,6 +227,24 @@ def test_hour_map_groups_days_that_differ() -> None:
         "- 09:00–17:00 Weekend day (25.00 c/kWh)",
         "- 17:00–24:00 Off-peak (15.00 c/kWh)",
     ]
+
+
+def test_hour_map_for_fixed_aest_names_the_clock_and_has_no_daylight_saving_note() -> None:
+    version = glohome()
+    version["timezone"] = LEGACY_TIMEZONE
+    lines = form.review_text(version).splitlines()
+    assert lines[0] == "**Import hours: Brisbane (AEST, no daylight saving; NEM time)**"
+    assert "23 or 25 hours" not in "\n".join(lines)
+    version.pop("timezone")  # a tariff stored before the option existed
+    assert form.review_text(version).splitlines()[0] == lines[0]
+
+
+def test_hour_map_for_gmt_has_no_daylight_saving_note() -> None:
+    version = glohome()
+    version["timezone"] = "GMT"
+    text = form.review_text(version)
+    assert text.splitlines()[0] == "**Import hours: GMT**"
+    assert "23 or 25 hours" not in text
 
 
 def test_hour_map_shows_gaps_without_failing() -> None:
@@ -222,7 +264,7 @@ def test_hour_map_includes_export_only_when_present() -> None:
         form.form_to_period("Midday", 0.0, "10-14", None),
     ]
     text = form.review_text(version)
-    assert "**Export hours (AEST, NEM time, UTC+10)**" in text
+    assert "**Export hours: Melbourne (AEST/AEDT, follows daylight saving)**" in text
     assert "- 10:00–14:00 Midday (0.00 c/kWh)" in text
 
 
@@ -265,15 +307,113 @@ def _strings() -> dict:
 
 
 @pytest.mark.parametrize("step", TIME_STEPS)
-def test_every_step_that_takes_times_repeats_the_timezone_note(step: str) -> None:
+def test_every_step_that_takes_times_says_which_clock(step: str) -> None:
     description = _strings()["options"]["step"][step]["description"]
-    assert form.TIMEZONE_NOTE in description
+    # The clock is the user's choice, so the sentence is a placeholder, not constant text.
+    placeholder = "{timezone_help}" if step == "tariff_basics" else "{timezone}"
+    assert placeholder in description
+    assert "All times are AEST" not in description
 
 
-def test_timezone_note_says_what_it_must() -> None:
-    note = form.TIMEZONE_NOTE
-    for phrase in ("AEST", "UTC+10", "no daylight saving", "NEM", "not Home Assistant"):
+# --- The pricing clock ---------------------------------------------------------------------
+
+
+def test_the_drop_down_offers_exactly_the_allowed_zones_in_order() -> None:
+    options = form.timezone_options()
+    assert [value for value, _ in options] == list(ALLOWED_TIMEZONES)
+    assert dict(options) == form.TIMEZONE_LABELS
+    assert [label for _, label in options] == [
+        "Melbourne (AEST/AEDT, follows daylight saving)",
+        "Sydney (AEST/AEDT, follows daylight saving)",
+        "Hobart (AEST/AEDT, follows daylight saving)",
+        "Canberra (AEST/AEDT, follows daylight saving)",
+        "Brisbane (AEST, no daylight saving; NEM time)",
+        "Perth (AWST, no daylight saving)",
+        "GMT",
+    ]
+
+
+def test_zones_with_half_hour_offsets_are_not_offered() -> None:
+    for name in ("Adelaide", "Darwin", "Broken_Hill", "Eucla", "Lord_Howe", "Auckland"):
+        assert f"Australia/{name}" not in ALLOWED_TIMEZONES
+    for place in ("Adelaide", "Darwin", "Broken Hill", "Eucla", "Lord Howe"):
+        assert place in form.TIMEZONE_HELP
+
+
+def test_new_tariffs_default_to_melbourne() -> None:
+    assert DEFAULT_TIMEZONE == "Australia/Melbourne"
+    assert form.new_version_dict(date(2026, 1, 1))["timezone"] == DEFAULT_TIMEZONE
+
+
+def test_a_version_with_no_zone_reads_as_fixed_aest_in_the_form() -> None:
+    assert form.draft_zone({}) == LEGACY_TIMEZONE
+    assert form.timezone_label(None) == "Brisbane (AEST, no daylight saving; NEM time)"
+
+
+@pytest.mark.parametrize(
+    ("zone", "phrases", "absent"),
+    [
+        ("Australia/Melbourne", ("Melbourne clock", "AEDT", "23 or 25 hours"), ("NEM",)),
+        ("Australia/Sydney", ("Sydney clock", "daylight saving", "23 or 25 hours"), ()),
+        ("Australia/Brisbane", ("Brisbane clock", "UTC+10", "NEM", "no daylight saving"), ("25",)),
+        (None, ("Brisbane clock", "UTC+10", "NEM"), ()),
+        ("Australia/Perth", ("Perth clock", "no daylight saving"), ("NEM",)),
+        ("GMT", ("GMT", "UTC+0", "no daylight saving"), ("clock:",)),
+    ],
+)
+def test_the_clock_note_says_what_it_must(zone, phrases, absent) -> None:
+    note = form.timezone_note(zone)
+    for phrase in phrases:
         assert phrase in note
+    for phrase in absent:
+        assert phrase not in note
+    assert "not Home Assistant's own timezone" in note
+
+
+def test_help_text_explains_the_bill_the_dashboard_day_and_the_missing_zones() -> None:
+    help_text = form.TIMEZONE_HELP
+    assert "bill" in help_text
+    assert "Home Assistant's own timezone" in help_text
+    assert "half an hour" in help_text
+
+
+def test_the_basics_text_uses_the_help_and_state_placeholders() -> None:
+    basics = _strings()["options"]["step"]["tariff_basics"]
+    assert basics["description"].startswith("Enter prices exactly as your retailer quotes them.")
+    assert "{timezone_state}" in basics["description"]
+    assert basics["data"]["timezone"]
+    assert basics["data_description"]["timezone"]
+
+
+def test_apply_timezone_sets_one_clock_on_every_version() -> None:
+    old, new = glohome(), glohome()
+    old["effective_from"] = "2026-01-01"
+    form.apply_timezone([old, new], "Australia/Sydney")
+    assert old["timezone"] == new["timezone"] == "Australia/Sydney"
+    assert form.draft_problem([old, new]) is None
+
+
+def test_apply_timezone_leaves_a_stored_tariff_alone_when_fixed_aest_is_kept() -> None:
+    old, new = glohome(), glohome()
+    old["effective_from"] = "2026-01-01"
+    del old["timezone"], new["timezone"]
+    form.apply_timezone([old, new], LEGACY_TIMEZONE)
+    assert "timezone" not in old and "timezone" not in new  # not written back
+    form.apply_timezone([old, new], "Australia/Melbourne")
+    assert old["timezone"] == new["timezone"] == "Australia/Melbourne"
+
+
+def test_apply_timezone_moves_a_tariff_that_already_names_a_zone_back_to_brisbane() -> None:
+    version = glohome()  # Melbourne
+    form.apply_timezone([version], LEGACY_TIMEZONE)
+    assert version["timezone"] == "Australia/Brisbane"
+
+
+def test_mixed_clocks_in_a_draft_are_reported() -> None:
+    old, new = glohome(), glohome()
+    old["effective_from"] = "2026-01-01"
+    new["timezone"] = "GMT"
+    assert "same time zone" in (form.draft_problem([old, new]) or "")
 
 
 def test_english_translation_matches_strings() -> None:
@@ -308,11 +448,15 @@ def _ids(slug: str) -> tuple[str, str]:
     return f"stat:{slug}", f"stat:{slug}_cost"
 
 
-def test_period_statistics_text_gives_the_daily_adjustment_and_the_statistics() -> None:
+def test_period_statistics_text_gives_the_daily_supply_for_reference_and_the_statistics() -> None:
     tariff = form.build_tariff([glohome()])
     text = form.period_statistics_text(tariff, _ids, "AUD")
-    # 92.40 c x 0.97 (3% discount, prices already include GST) = $0.89628.
+    # 92.40 c x 0.97 (3% discount, prices already include GST) = $0.89628, shown for reference
+    # only: Home Assistant does not apply its daily cost adjustment to per-period sources.
     assert "AUD 0.89628" in text
+    assert "for reference only" in text
+    assert "not included in these period costs" in text
+    assert "to enter" not in text
     assert "92.40 c/day supply charge less the 3% discount" in text
     assert "GST" not in text
     assert "rates starting 2026-10-28" in text
@@ -349,6 +493,25 @@ def test_period_statistics_step_has_its_strings() -> None:
     assert "{details}" in step["description"]
     assert step["data"]["enabled"]
     assert "tariff_period_stats" in steps["tariff"]["menu_options"]
-    # It must warn about the double count and say the adjustment is a fixed number.
-    for phrase in ("twice", "daily cost adjustment", "one grid source only", "fixed number"):
-        assert phrase in step["description"]
+    # It must warn about the double count, say the supply charge is not applied in this mode,
+    # tell the user to leave the dashboard's adjustment at 0 and point to the combined statistic.
+    text = step["description"]
+    for phrase in (
+        "twice",
+        "does not apply its daily cost adjustment",
+        "will not appear",
+        "Leave the daily cost adjustment at 0",
+        "combined cost statistic",
+    ):
+        assert phrase in text
+    # The superseded advice (enter the adjustment on one source) must be gone.
+    for gone in ("one grid source only", "fixed number", "Enter the amount below"):
+        assert gone not in text
+
+
+def test_the_clock_change_step_has_its_strings() -> None:
+    step = _strings()["options"]["step"]["tariff_timezone_changed"]
+    for placeholder in ("{old_clock}", "{new_clock}"):
+        assert placeholder in step["description"]
+    assert "Recalculate cost history" in step["description"]
+    assert step["data"]["reprice_history"]

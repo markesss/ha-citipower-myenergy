@@ -18,8 +18,11 @@ from typing import Any
 
 from .exceptions import TariffError
 from .tariff import (
+    ALLOWED_TIMEZONES,
+    DEFAULT_TIMEZONE,
     KIND_EXPORT,
     KIND_IMPORT,
+    LEGACY_TIMEZONE,
     SCHEMA_VERSION,
     Period,
     Tariff,
@@ -30,13 +33,84 @@ from .tariff import (
     period_slugs,
 )
 
-# The same sentence is repeated, as plain text, in every step description in strings.json
-# (translations cannot take placeholders for constant text); a test keeps them identical.
-TIMEZONE_NOTE = (
-    "All times are AEST (UTC+10) with no daylight saving. This is NEM (National Electricity "
-    "Market) time, the clock your meter data and network tariffs use. It is a pricing clock, "
-    "not Home Assistant's own timezone."
+# --- The pricing clock -----------------------------------------------------------------------
+
+# What the timezone drop-down shows. Only these zones are offered (see tariff.ALLOWED_TIMEZONES
+# for why): everything else in the world, and the half-hour Australian zones, is left out.
+TIMEZONE_LABELS = {
+    "Australia/Melbourne": "Melbourne (AEST/AEDT, follows daylight saving)",
+    "Australia/Sydney": "Sydney (AEST/AEDT, follows daylight saving)",
+    "Australia/Hobart": "Hobart (AEST/AEDT, follows daylight saving)",
+    "Australia/Canberra": "Canberra (AEST/AEDT, follows daylight saving)",
+    "Australia/Brisbane": "Brisbane (AEST, no daylight saving; NEM time)",
+    "Australia/Perth": "Perth (AWST, no daylight saving)",
+    "GMT": "GMT",
+}
+# Zones that change their clocks, so a local day is sometimes 23 or 25 hours long.
+DST_ZONES = frozenset(
+    {"Australia/Melbourne", "Australia/Sydney", "Australia/Hobart", "Australia/Canberra"}
 )
+
+# Shown in the Basics step beside the clock choice.
+TIMEZONE_HELP = (
+    "Choose the clock your retailer's hours are on. Retailer fact sheets just say "
+    '"local time", so your bill is the authority. Adelaide, Darwin, Broken Hill, Eucla and '
+    "Lord Howe are not offered because their clocks sit half an hour off UTC and the "
+    "statistics are hourly. Home Assistant's Energy dashboard draws its days on Home "
+    "Assistant's own timezone, so a different clock here can move a few cents across the "
+    "edge of a day."
+)
+
+
+def timezone_options() -> list[tuple[str, str]]:
+    """Return the drop-down (value, label) pairs, in the order they are offered."""
+    return [(name, TIMEZONE_LABELS[name]) for name in ALLOWED_TIMEZONES]
+
+
+def timezone_label(name: str | None) -> str:
+    """Return a zone as the user sees it; a version with no zone is fixed AEST (Brisbane)."""
+    return TIMEZONE_LABELS.get(name or LEGACY_TIMEZONE, name or LEGACY_TIMEZONE)
+
+
+def timezone_note(name: str | None) -> str:
+    """Return the sentence every step that shows times uses to say which clock it means."""
+    zone = name or LEGACY_TIMEZONE
+    place = zone.rsplit("/", 1)[-1]
+    if zone in DST_ZONES:
+        clock = (
+            f"Times are on the {place} clock: AEST/AEDT, following daylight saving. On the two "
+            "days a year the clocks change that day has 23 or 25 hours, and the hour that is "
+            "skipped or repeated is priced by the clock."
+        )
+    elif zone == LEGACY_TIMEZONE:
+        clock = (
+            f"Times are on the {place} clock: AEST (UTC+10) with no daylight saving. That is "
+            "also NEM (National Electricity Market) time, the clock your meter data uses."
+        )
+    elif zone == "GMT":
+        clock = "Times are on GMT (UTC+0), with no daylight saving."
+    else:
+        clock = f"Times are on the {place} clock, with no daylight saving."
+    return f"{clock} It is a pricing clock, not Home Assistant's own timezone."
+
+
+def draft_zone(draft: Mapping[str, Any]) -> str:
+    """Return the zone a draft version prices on (no key means fixed AEST, i.e. Brisbane)."""
+    return str(draft.get("timezone") or LEGACY_TIMEZONE)
+
+
+def apply_timezone(versions: Sequence[dict[str, Any]], chosen: str) -> None:
+    """Set the pricing clock on every version dict; a tariff has one clock for all its rates.
+
+    Nothing is written when the choice is the fixed AEST clock and no version already names a
+    zone, so a tariff stored before the option existed stays exactly as it was until the user
+    picks something else (or already had an explicit zone).
+    """
+    if chosen == LEGACY_TIMEZONE and not any("timezone" in version for version in versions):
+        return
+    for version in versions:
+        version["timezone"] = chosen
+
 
 DAY_NAMES = ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 _DAY_ABBR = tuple(name[:3] for name in DAY_NAMES)
@@ -170,6 +244,7 @@ def new_version_dict(effective_from: date) -> dict[str, Any]:
         "discount_pct": 0.0,
         "import_periods": [],
         "export_periods": [],
+        "timezone": DEFAULT_TIMEZONE,
     }
 
 
@@ -244,6 +319,8 @@ def describe_versions(versions: Sequence[Mapping[str, Any]]) -> str:
             line += f", {exports} export period{'s' if exports != 1 else ''}"
         line += f", supply {float(version.get('supply_c_per_day') or 0):.2f} c/day"
         lines.append(line)
+    if versions:
+        lines += ["", f"Clock: {timezone_label(versions[-1].get('timezone'))}"]
     return "\n".join(lines)
 
 
@@ -281,6 +358,7 @@ def version_from_draft(draft: Mapping[str, Any]) -> TariffVersion:
         supply_c_per_day=float(draft.get("supply_c_per_day") or 0),
         discount_pct=float(draft.get("discount_pct") or 0),
         prices_include_gst=bool(draft.get("prices_include_gst", True)),
+        timezone=draft.get("timezone"),
     )
 
 
@@ -309,7 +387,12 @@ def hour_map_text(version: TariffVersion, kind: str) -> str:
         groups.setdefault(tuple(pattern), []).append(day)
 
     label = "Import" if kind == KIND_IMPORT else "Export"
-    lines = [f"**{label} hours (AEST, NEM time, UTC+10)**"]
+    lines = [f"**{label} hours: {timezone_label(version.timezone)}**"]
+    if version.zone_name in DST_ZONES:
+        lines.append(
+            "_On the two days a year the clocks change a day has 23 or 25 hours; the hour that "
+            "is skipped or repeated is priced by the clock._"
+        )
     for pattern, days in groups.items():
         label_days = _days_label(days)
         lines.append(f"{label_days[:1].upper()}{label_days[1:]}:")
@@ -349,11 +432,13 @@ def draft_problem(versions: Sequence[Mapping[str, Any]]) -> str | None:
 def period_statistics_text(
     tariff: Tariff, ids_for: Callable[[str], tuple[str, str]], currency: str
 ) -> str:
-    """Return the markdown the "statistics per period" step shows: what to enter, what is written.
+    """Return the markdown the "statistics per period" step shows: what is written, the supply.
 
-    ``ids_for`` turns a period slug into its (kWh, cost) statistic ids. The daily cost adjustment
-    is the newest version's supply charge after GST and the discount, exactly what the combined
-    cost statistic puts on each day, so period costs plus this equal the combined cost.
+    ``ids_for`` turns a period slug into its (kWh, cost) statistic ids. The daily supply amount is
+    the newest version's supply charge after GST and the discount, exactly what the combined cost
+    statistic puts on each day, so period costs plus this equal the combined cost. It is shown for
+    reference only: Home Assistant's daily cost adjustment is not applied to per-period sources,
+    so the supply charge does not reach the dashboard in this mode.
     """
     version = tariff.versions[-1]
     current = {period.name for period in version.import_periods}
@@ -364,9 +449,10 @@ def period_statistics_text(
     if version.discount_pct:
         how += f" less the {version.discount_pct:g}% discount"
     lines = [
-        f"**Daily cost adjustment to enter: {currency} {amount:.5f}**",
+        f"**Daily supply charge, for reference only: {currency} {amount:.5f}**",
         "",
-        f"That is your {how}, from the rates starting {version.effective_from.isoformat()}.",
+        f"That is your {how}, from the rates starting {version.effective_from.isoformat()}. "
+        "It is not included in these period costs, and the dashboard does not add it.",
         "",
         "Statistics that will be written:",
     ]
