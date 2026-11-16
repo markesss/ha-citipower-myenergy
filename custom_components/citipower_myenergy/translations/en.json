@@ -244,6 +244,11 @@
     }
   },
   "entity": {
+    "button": {
+      "refresh_data": {
+        "name": "Refresh data"
+      }
+    },
     "sensor": {
       "latest_data": {
         "name": "Latest data"

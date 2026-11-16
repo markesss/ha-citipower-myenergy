@@ -19,7 +19,7 @@ from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
 from .session_store import SessionStore
 from .tls import async_create_session
 
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 
 def site_name(data: dict) -> str:
