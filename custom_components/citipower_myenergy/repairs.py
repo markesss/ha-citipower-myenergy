@@ -72,12 +72,15 @@ class ChainBreakRepairFlow(RepairsFlow):
 
         guard = guard_for(self.hass, entry.data[CONF_NMI])
         # Forget the old failures first: the rewrite checks every statistic again and raises the
-        # notice straight back if one still does not join.
+        # notice straight back if one still does not join. Keep a copy, because if the rewrite
+        # itself fails nothing was checked and the user must still be told, and able to retry.
+        saved = dict(guard.broken)
         guard.reset()
         try:
             await async_reprice_entry(self.hass, entry, tariff, FAR_PAST)
         except Exception:
             _LOGGER.exception("Repairing the cost statistics failed")
+            guard.restore(saved)
             return self.async_abort(reason="repair_failed")
         return self.async_create_entry(data={})
 

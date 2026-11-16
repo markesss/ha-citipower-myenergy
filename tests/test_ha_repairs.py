@@ -158,31 +158,112 @@ async def test_confirming_reprices_all_history_and_forgets_old_failures_first(
     assert args[3] == date(2000, 1, 1)  # from the first day anything could exist
 
 
-async def test_a_failed_repricing_aborts_and_the_notice_is_left_to_the_next_check(
-    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
-) -> None:
-    """Current behaviour, pinned: the failures are forgotten before the rewrite is attempted.
-
-    So when the rewrite itself fails the notice is already gone. It comes back if the next write
-    or check finds the row still does not join; the flow does not restore it.
-    """
-    entry = _entry(hass)
+def _broken_notice(hass: HomeAssistant, entry: MockConfigEntry, *labels: str):
+    """Set up the notice the way a failed chain check does; return the guard."""
     guard = guard_for(hass, NMI)
     guard.entry_id = entry.entry_id
-    guard.broken["cost_import"] = "01 Jan 2026 04:00"
-    ir.async_create_issue(
-        hass,
-        DOMAIN,
-        guard.issue_id,
-        is_fixable=True,
-        severity=ir.IssueSeverity.WARNING,
-        translation_key="chain_break",
-    )
+    for label in labels:
+        guard.report(f"{DOMAIN}:{NMI}_{label}", 1767240000.0)  # a real check, so a real notice
+    return guard
+
+
+def _issue(hass: HomeAssistant, guard):
+    return ir.async_get(hass).async_get_issue(DOMAIN, guard.issue_id)
+
+
+async def test_a_failed_repricing_aborts_and_keeps_the_notice_so_the_user_can_retry(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    entry = _entry(hass)
+    guard = _broken_notice(hass, entry, "cost_import")
+    before = dict(_issue(hass, guard).translation_placeholders)
+    failures = dict(guard.broken)
 
     with patch(FIX, new=AsyncMock(side_effect=RuntimeError("recorder unavailable"))):
         result = await (await _flow(hass, entry.entry_id)).async_step_confirm({})
 
     assert result["reason"] == "repair_failed"
     assert "Repairing the cost statistics failed" in caplog.text
+    assert guard.broken == failures
+    notice = _issue(hass, guard)
+    assert notice is not None and notice.is_fixable
+    # The notice still names the statistic and hour that were broken before the attempt.
+    assert dict(notice.translation_placeholders) == before
+
+
+async def test_a_repricing_that_fails_after_fixing_some_statistics_keeps_every_failure(
+    hass: HomeAssistant,
+) -> None:
+    entry = _entry(hass)
+    guard = _broken_notice(hass, entry, "cost_import", "cost_export")
+    failures = dict(guard.broken)
+    before = dict(_issue(hass, guard).translation_placeholders)
+
+    async def half_done(*args, **kwargs) -> int:
+        guard.report(f"{DOMAIN}:{NMI}_cost_import", None)  # rewritten and joined, then it dies
+        raise RuntimeError("recorder unavailable")
+
+    with patch(FIX, new=AsyncMock(side_effect=half_done)):
+        result = await (await _flow(hass, entry.entry_id)).async_step_confirm({})
+
+    assert result["reason"] == "repair_failed"
+    # Nothing is dropped: a retry rewrites everything again, so a stale entry costs nothing.
+    assert guard.broken == failures
+    assert dict(_issue(hass, guard).translation_placeholders) == before
+
+
+async def test_a_repricing_that_fails_after_finding_a_new_break_keeps_that_too(
+    hass: HomeAssistant,
+) -> None:
+    entry = _entry(hass)
+    guard = _broken_notice(hass, entry, "cost_import")
+
+    async def finds_another(*args, **kwargs) -> int:
+        guard.report(f"{DOMAIN}:{NMI}_cost_export", 1767250000.0)
+        raise RuntimeError("recorder unavailable")
+
+    with patch(FIX, new=AsyncMock(side_effect=finds_another)):
+        await (await _flow(hass, entry.entry_id)).async_step_confirm({})
+
+    assert set(guard.broken) == {"cost_import", "cost_export"}
+    assert _issue(hass, guard) is not None
+
+
+async def test_a_repair_that_joins_everything_clears_the_notice_and_failures(
+    hass: HomeAssistant,
+) -> None:
+    entry = _entry(hass)
+    guard = _broken_notice(hass, entry, "cost_import", "cost_export")
+
+    async def joins(*args, **kwargs) -> int:
+        for label in ("cost_import", "cost_export"):
+            guard.report(f"{DOMAIN}:{NMI}_{label}", None)
+        return 24
+
+    with patch(FIX, new=AsyncMock(side_effect=joins)):
+        result = await (await _flow(hass, entry.entry_id)).async_step_confirm({})
+
+    assert result["type"] == "create_entry"
     assert guard.broken == {}
-    assert ir.async_get(hass).async_get_issue(DOMAIN, guard.issue_id) is None
+    assert _issue(hass, guard) is None
+
+
+async def test_a_repair_that_leaves_one_statistic_broken_raises_the_notice_straight_back(
+    hass: HomeAssistant,
+) -> None:
+    entry = _entry(hass)
+    guard = _broken_notice(hass, entry, "cost_import", "cost_export")
+
+    async def one_still_bad(*args, **kwargs) -> int:
+        guard.report(f"{DOMAIN}:{NMI}_cost_import", None)
+        guard.report(f"{DOMAIN}:{NMI}_cost_export", 1767250000.0)
+        return 24
+
+    with patch(FIX, new=AsyncMock(side_effect=one_still_bad)):
+        result = await (await _flow(hass, entry.entry_id)).async_step_confirm({})
+
+    assert result["type"] == "create_entry"
+    assert set(guard.broken) == {"cost_export"}
+    notice = _issue(hass, guard)
+    assert notice is not None
+    assert notice.translation_placeholders["statistic"] == "cost_export"

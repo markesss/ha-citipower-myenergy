@@ -134,6 +134,15 @@ class ChainGuard:
         self.broken.clear()
         self._sync_issue()
 
+    def restore(self, saved: dict[str, str]) -> None:
+        """Put back failures taken before a repair that then failed, and the notice with them.
+
+        Anything the failed attempt reported since is kept, so no failure is lost. Entries it
+        had already fixed come back too: the retry rewrites everything, which clears them again.
+        """
+        self.broken = {**saved, **self.broken}
+        self._sync_issue()
+
     def _sync_issue(self) -> None:
         if not self.broken:
             ir.async_delete_issue(self._hass, DOMAIN, self.issue_id)
