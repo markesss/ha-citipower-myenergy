@@ -1538,10 +1538,16 @@ async def test_chain_the_repairs_flow_reprices_and_clears_the_notice(
         await _window_poll(hass)  # leaves the break standing and the notice raised
     assert _issue(hass, guard) is not None
 
+    notice = _issue(hass, guard)
     flow = await async_create_fix_flow(hass, guard.issue_id, {"entry_id": entry.entry_id})
     flow.hass = hass
+    flow.issue_id = guard.issue_id  # what Home Assistant's repairs manager sets on a fix flow
     form = await flow.async_step_init()
     assert form["type"] == "form" and form["step_id"] == "confirm"
+    # The text names the statistic and hour: a custom fix flow must pass the notice's
+    # placeholders itself, because they are used in the step's description.
+    assert dict(form["description_placeholders"]) == dict(notice.translation_placeholders)
+    assert {"statistic", "hour"} <= set(form["description_placeholders"])
     result = await flow.async_step_confirm({})
     assert result["type"] == "create_entry"
 

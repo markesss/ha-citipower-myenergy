@@ -300,12 +300,11 @@
   "issues": {
     "chain_break": {
       "title": "Cost statistics need repairing",
-      "description": "The running total of the {statistic} statistic does not join the row before it at {hour}, so the Energy dashboard can show a large negative or positive cost around that time. Repairing reprices all your recorded costs from the stored meter readings, which rebuilds the totals. It does not change your readings or tariff.",
       "fix_flow": {
         "step": {
           "confirm": {
             "title": "Repair the cost statistics",
-            "description": "This reprices all recorded costs from the stored readings with your saved tariff, and can take a minute. Nothing else is changed."
+            "description": "The running total of the {statistic} statistic does not join the row before it at {hour}, so the Energy dashboard can show a large negative or positive cost around that time. Repairing reprices all your recorded costs from the stored meter readings with your saved tariff, which rebuilds the totals, and can take a minute. It does not change your readings or tariff."
           }
         },
         "abort": {
