@@ -10,6 +10,7 @@ flowchart TB
         co["coordinator.py"]
         se["sensor.py"]
         bu["button.py"]
+        en["entity.py<br/>shared entity base"]
         ini["__init__.py"]
         st["statistics.py"]
         di["diagnostics.py"]

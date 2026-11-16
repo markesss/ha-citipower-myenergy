@@ -227,6 +227,33 @@ more than two hours, or you sign out everywhere), the **Session** sensor
 shows *Expired* and Home Assistant asks you to sign in again. Nothing is lost:
 the next import fills in every hour missed.
 
+## Removing the integration
+
+1. If the Energy dashboard uses this integration's statistics (grid consumption, return, cost,
+   or the per-period ones), remove those sources under **Settings > Dashboards > Energy**
+   first, so nothing is left pointing at them.
+2. Go to **Settings > Devices & services**, open **CitiPower & Powercor myEnergy**, click the
+   three-dot menu next to the entry and choose **Delete**.
+3. If you installed through HACS, remove it there afterwards (**HACS**, this integration,
+   three-dot menu, **Remove**), then restart Home Assistant. HACS only removes the files; it
+   does not remove the entry, so delete the entry first.
+
+Deleting the entry removes the device and its entities (the sensors and the Refresh data
+button), the stored sign-in session (the cookies kept so you do not need a new code after a
+restart), and any Repairs notice the integration raised for that entry. Your tariff and the
+keep-alive setting are part of the entry and go with it. Nothing needs doing on the myEnergy
+portal: the session simply lapses there after a couple of hours, so you do not need to sign
+out.
+
+**What is kept:** the long-term statistics are history, so Home Assistant keeps them: the
+imported usage, and the cost and per-period statistics if you used them. They stay in the
+database and are visible in the Energy dashboard's past. To clear them, open
+**Developer Tools > Statistics**: statistics whose source is gone are flagged there, and
+the fix option offers to delete them. Home Assistant decides which statistics it flags, so if
+yours are not offered, they are harmless and can stay. Their
+ids start with `citipower_myenergy:`. If you reinstall later with the same NMI, the import
+continues the existing history without double-counting.
+
 ## Entities
 
 | Entity | What it shows |
