@@ -129,7 +129,7 @@ flowchart LR
     kwh["stored kWh<br/>(…_e1)"] --> day["whole finished local days<br/>tariff.cost_for_day"]
     day --> cost["…_e1_cost<br/>(currency, has_sum)<br/>includes the supply charge"]
     day --> byp["cost_for_day_by_period<br/>(opt-in)"]
-    byp --> per["…_e1_&lt;slug&gt; kWh and<br/>…_e1_&lt;slug&gt;_cost per period<br/>(supply charge excluded)"]
+    byp --> per["…_e1_&lt;slug&gt; kWh and<br/>…_e1_&lt;slug&gt;_cost per period<br/>(supply charge per the supply mode)"]
 ```
 
 - Costs are written a **whole finished day** at a time and repaired with the same rule as kWh:
@@ -146,12 +146,39 @@ flowchart LR
   a kWh and a cost statistic, so the Energy dashboard can draw each as its own coloured grid
   source. The period set is the union of all versions' period names, keyed by `period_slugs`;
   every statistic has a row for every hour (zero outside its period). All of them are repaired
-  together, so they can never disagree. The period costs leave out the supply charge, and
-  Home Assistant's fixed daily cost adjustment is not applied to per-period (time-of-use) sources,
-  so in this mode the supply charge does not reach the dashboard; the options step shows
-  `daily_supply_dollars` for reference only, and the user must not also use the combined cost
-  source. Renamed or removed periods leave their old statistics behind, unwritten.
+  together, so they can never disagree. Home Assistant's fixed daily cost adjustment is not
+  applied to per-period (time-of-use) sources, so where the supply charge appears is the user's
+  choice, the `supply_in_periods` option (`const.SUPPLY_MODES`), read with `tariff.supply_mode_of`
+  (absent or unknown means `none`) and passed to `cost_for_day_by_period(..., supply_mode)`:
+  `none` (default) leaves it out of the period costs; `spread` adds `daily_supply_dollars` divided
+  by the hours the local day really has (23, 24 or 25) to every hour; `first_hour` adds all of it to
+  the day's first hour, the hour the combined cost carries it on. With the last two the periods
+  add up to the combined cost for a whole day. A single-period (flat) version always behaves as
+  `none`. The mode only changes cost rows; the options flow asks for it (and offers a
+  recalculation, `async_recalculate_costs(..., supply_mode=)`) only for a time-of-use tariff with
+  the per-period option on. Users must not also use the combined cost source alongside the period
+  sources. Renamed or removed periods leave their old statistics behind, unwritten.
 - Turning the option on backfills the whole stored history on the next poll.
+
+### Live tariff sensors
+
+Three sensors (`sensor.py`) follow the tariff's clock, so automations can react to the period
+and act before an expensive one: **Current tariff period** (an enum of the period names, with
+rates and the next period as attributes), **Current tariff rate** (`<currency>/kWh`, GST
+included, before the discount) and **Next tariff period starts** (a timestamp). They exist only
+when a valid tariff is saved, and they are not polled and never touch the recorder.
+
+`tariff.py` supplies the pure lookups: `period_at` (the period at an aware moment, on the
+tariff's clock, using the version in force that local day), `rate_at` (that period's headline
+and discounted rate) and `next_period_change`. The last walks hour boundaries for at most
+`SCAN_HOURS` (8 days) until the period's name or rates differ, so adjacent hours of one period,
+including a stretch that crosses midnight, are a single stretch, and a version that only
+changes the supply charge is not a change. `TariffTimeline` in `sensor.py` holds the answer as
+of the last boundary and one `async_track_point_in_utc_time` timer for the next; each fire
+recomputes, reschedules and rewrites the entities. When nothing changes within the scan (a flat
+tariff, or the next version is further away) it looks again after `SCAN_HOURS - 24` hours so a
+later version is still seen about a day before it starts. Saving the tariff reloads the entry
+(the options listener), which rebuilds the timeline; unloading cancels the timer.
 
 ## Session persistence
 

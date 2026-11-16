@@ -51,7 +51,8 @@ tariff and costs → Set up a tariff.*
   discount (taken off supply and usage charges only).
 - Rates change, so add new rates **from a date** rather than editing old ones. Use *Recalculate
   cost history* to reprice days that are already recorded. Per-day allowances ("first 30 kWh a
-  day free") are supported in the *Advanced: edit as YAML* step.
+  day free") are supported in the *Advanced: edit as YAML* step. Worked YAML examples, the field
+  reference and how to back up a tariff are in [`docs/TARIFF_YAML.md`](docs/TARIFF_YAML.md).
 
 **Pick the clock your retailer's hours are on.** The *Tariff details* step has a *Pricing
 clock* choice, and every step that takes hours repeats which clock you picked. Retailer fact
@@ -95,18 +96,99 @@ Then, in the Energy dashboard:
    cost, **Use an entity tracking the total costs** with the matching `_cost` statistic.
 2. **Remove the combined grid source** (or turn off its cost). Using it as well counts your energy
    and cost twice.
-3. **The daily supply charge is not applied.** The period costs leave it out, and the dashboard's
-   own daily cost adjustment is not applied when you use time-of-use (per-period) billing meters
-   like this. So the dashboard's grid cost is lower than your bill by the supply charge for each
-   day (after any discount). The step shows that daily amount for reference, for example
-   `AUD 0.89628`. Leave the dashboard's daily cost adjustment at 0 on every source.
-4. Check one day: the dashboard's grid cost should equal the period costs, which is the combined
-   cost statistic (`…_e1_cost`) minus that day's supply charge. To see the full cost including
-   the supply charge, use the combined cost statistic instead of the per-period sources.
+3. **Choose where the daily supply charge goes** (below). The dashboard's own daily cost
+   adjustment is not applied to time-of-use (per-period) sources like these, so leave it at 0 on
+   every source, and let the period costs carry the supply charge if you want it shown.
+4. Check one day: with the supply charge in the period costs, the dashboard's grid cost should
+   equal that day's combined cost statistic (`…_e1_cost`), and your bill. Without it, the grid
+   cost is lower than your bill by the supply charge for the day (after any discount).
+
+**Supply charge in period costs.** When you turn the per-period statistics on with a
+time-of-use tariff, *Configure → Electricity tariff and costs → Statistics per tariff period*
+asks where the daily supply charge goes. The step shows the daily amount, for example
+`AUD 0.89628`.
+
+| Choice | What the period costs hold | Use it when |
+|---|---|---|
+| **Left out** (default) | Usage times rate only. Add up the periods and you are short of your bill by one supply charge a day. | You only want to compare the periods, and use the combined cost for the bill figure. |
+| **Spread equally over every hour of the day** | Usage plus a share of the supply charge: one 24th each hour (a 23rd or 25th on the days the clocks change). The periods add up to the combined cost, and the hourly chart stays smooth. | You want the dashboard total to match your bill. |
+| **All on the first hour of the day** | Usage, plus the whole supply charge on the day's first hour, in whichever period covers midnight. The periods add up to the combined cost, with a step at that hour. | You want the total to match, and a charge that lands once a day. |
+
+With either of the last two, a period's cost divided by its kWh reads above its tariff rate,
+because it includes part of the supply charge. Do not read the dashboard as a rate check. The
+combined `…_e1_cost` statistic is the same in all three, so the cost for the whole day is never
+double counted if you use it on its own. A flat rate has one period, so it has no choice to
+make and stays on *Left out*; the dashboard applies its own daily adjustment to it as usual.
+Changing the choice offers to rewrite the recorded period costs straight away (ticked by
+default); older days keep their old costs until you do, or until you run *Recalculate cost
+history*.
 
 Renaming or removing a period stops its statistics being written but leaves the old ones in place;
 clear them in *Developer Tools → Statistics* if you do not want them. Turning the option off keeps
 everything already written.
+
+### Sensors for automations
+
+Once a tariff is saved, three sensors follow its clock, so an automation can react when a period
+starts or act shortly before an expensive one. They are not polled: each updates exactly when the
+period changes, on the tariff's pricing clock (so daylight saving is handled).
+
+| Sensor | State | Attributes |
+|---|---|---|
+| Current tariff period | The period's name, such as `Peak` | `rate_c_per_kwh`, `rate_after_discount_c_per_kwh`, `tiered`, `period_slug`, `next_period`, `next_rate_c_per_kwh`, `next_period_starts` |
+| Current tariff rate | The rate in `<currency>/kWh`, such as `0.165` | `period`, `rate_after_discount` |
+| Next tariff period starts | A timestamp | `next_period` |
+
+The rate includes GST and is **before** any pay-on-time discount (the discounted figure is an
+attribute). A period with a per-day allowance shows its first rate and `tiered: true`. "Next" means
+the next *different* period, so an Off Peak that runs from 9pm to 11am is one stretch, not two. A
+flat tariff never changes, so its next-period sensor is unknown.
+
+These give the rate and period, not a live cost: the portal's readings arrive a day late, so cost
+statistics are for yesterday and earlier.
+
+Entity ids come from your device name; yours may differ from the `myenergy_home` used here.
+
+```yaml
+automation:
+  # When Peak starts
+  - alias: Pause the pool pump at Peak
+    triggers:
+      - trigger: state
+        entity_id: sensor.myenergy_home_current_tariff_period
+        to: "Peak"
+    actions:
+      - action: switch.turn_off
+        target: {entity_id: switch.pool_pump}
+
+  # Ten minutes before Peak starts
+  - alias: Pre-cool before Peak
+    triggers:
+      - trigger: time
+        at: sensor.myenergy_home_next_tariff_period_starts
+        offset: "-00:10:00"
+    conditions:
+      - condition: state
+        entity_id: sensor.myenergy_home_current_tariff_period
+        attribute: next_period
+        state: "Peak"
+    actions:
+      - action: climate.set_temperature
+        target: {entity_id: climate.living_room}
+        data: {temperature: 21}
+```
+
+If you want minutes until the next period (as a template sensor of your own):
+
+```yaml
+template:
+  - sensor:
+      - name: "Minutes until next tariff period"
+        unit_of_measurement: min
+        state: >
+          {{ ((states('sensor.myenergy_home_next_tariff_period_starts') | as_datetime - now())
+             .total_seconds() / 60) | round(0) }}
+```
 
 ## Sessions and re-signing in
 
@@ -128,6 +210,7 @@ the next import fills in every hour missed.
 | Latest data | When the newest reading ends |
 | Latest day grid import / export | Total for the latest complete day |
 | Session (diagnostic) | `active` or `expired`, with the portal's reported time remaining |
+| Current tariff period / rate, Next tariff period starts | Only when a tariff is set up. See [Sensors for automations](#sensors-for-automations) |
 
 ## Troubleshooting
 

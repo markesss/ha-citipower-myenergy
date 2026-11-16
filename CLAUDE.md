@@ -54,9 +54,10 @@ custom_components/citipower_myenergy/
   tls.py            HTTP sessions with the portal's missing TLS intermediate (certs/)
   coordinator.py    DataUpdateCoordinator + keep-alive loop + reauth trigger
   config_flow.py    user → method (email/SMS) → code → nmi; reauth; options
-  sensor.py         latest data, latest-day kWh per channel, session status
+  sensor.py         latest data, latest-day kWh per channel, session status; with a tariff,
+                    live period / rate / next-change sensors on one boundary timer (TariffTimeline)
   diagnostics.py    redacted diagnostics
-  tariff.py         PURE: tariff model + per-day pricing on a selectable clock, per-period breakdown, slugs
+  tariff.py         PURE: tariff model + per-day pricing on a selectable clock, per-period breakdown with supply-charge modes, slugs
   tariff_form.py    PURE: helpers for the tariff options flow (form <-> dict, review text)
   tariff_flow.py    HA: the tariff steps of the options flow (menu-driven)
   (cost statistics and the opt-in per-period statistics live in statistics.py)

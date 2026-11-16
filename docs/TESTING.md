@@ -11,7 +11,7 @@ pytest -q
 |---|---|---|
 | `tests/test_portal.py` | no | Aura/remoting parsing, MFA page, redirects, URL masking |
 | `tests/test_nem12.py` | no | NEM12 parsing, hourly roll-up, units, 400 records, models, chunking |
-| `tests/test_tariff*.py` | no | tariff pricing and per-period breakdown, the pricing clock (time zones, 23 and 25 hour days), options-flow form helpers and strings |
+| `tests/test_tariff*.py` | no | tariff pricing and per-period breakdown, the pricing clock (time zones, 23 and 25 hour days), the supply-charge modes (`test_tariff_supply_modes.py`), options-flow form helpers and strings |
 | `tests/test_ha_options_flow.py` | yes | the tariff options flow, including the clock change and repricing prompt |
 | `tests/test_ha_config_flow.py` | yes | full flow, bad password, bad code + retry, resend, NMI choice, reauth |
 | `tests/test_ha_statistics.py` | yes | first import, append-only, repair on change, separate export stat |

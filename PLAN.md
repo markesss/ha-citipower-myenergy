@@ -404,6 +404,17 @@ open-ended, thresholds ascending.
         To see the full cost use the combined cost statistic, never alongside the per-period
         sources (it double counts); the UI text and README say so. Possible future fix:
         attach it to the first-hour period cost or add a supply-charge source.
+        **Superseded as a fixed behaviour, 16 Nov 2026 (user decision): a choice.** The
+        `supply_in_periods` option (`none` default, `spread`, `first_hour`) says where the
+        daily supply charge goes in the period costs. `none` is the behaviour above. `spread`
+        adds one share (daily supply / hours the local day really has: 23, 24 or 25) to every
+        hour, `first_hour` adds all of it to the day's first hour; both make the periods add up
+        to the combined cost (per day for spread, per hour for first_hour). Flat rates have no
+        choice and stay on `none`. The combined cost statistic is unchanged. The per-period
+        step of the options flow chains into a "Supply charge in period costs" step (only for a
+        time-of-use tariff with the option on) with a recalculation tick-box, ticked by default.
+        Tests: `test_tariff_supply_modes.py`, `test_ha_statistics.py` (`test_supply_mode_*`),
+        `test_ha_options_flow.py`, `test_ha_coordinator_cost.py`. Not yet live-verified.
       - Per-period costs must sum with the supply charge to the combined cost: add a test
         (sum of period costs + days x daily supply == combined cost) at hour and day level.
       - Reuse the whole-day pricing and repair logic; a tariff version or reading change
@@ -563,6 +574,20 @@ open-ended, thresholds ascending.
         `tzdata`; (4) the Energy dashboard's own day follows Home Assistant's timezone
         (Australia/Sydney on the live HA), so a few cents can move across its day edge; (5) a
         stray old-clock hour at the end of history is re-priced when the next day completes.
+- [x] **Live tariff sensors (16 Nov 2026).** Requested by the user to replace their hand-built
+      template package (`globird_time_of_use_rates.yaml`: current rate, period, minutes until the
+      next period). Built: `period_at`, `rate_at`, `next_period_change` in `tariff.py` (pure) and
+      three sensors in `sensor.py` (current tariff period, current tariff rate, next tariff period
+      starts), created only when a valid tariff is saved. One timer set for the next boundary, no
+      polling, no recorder access. Decisions: the rate is the headline rate including GST and
+      before the discount (Off Peak reads 0.165, as the template did) with the discounted rate as
+      an attribute; a tiered period reports its first tier and `tiered: true`; "next change" means
+      a different period name or different rates, so a midnight-crossing Off Peak is one stretch
+      and a supply-charge-only version is not a change; no minutes-until sensor (a template in the
+      README). Tests: `test_tariff_live.py` (pure, incl. the 23- and 25-hour days) and
+      `test_ha_tariff_sensors.py` (real setup, frozen time, boundary crossing, reload, unload).
+      **Still to verify live:** the sensors against the clock on the user's HA, and that the old
+      template package can be removed.
 - [ ] **Later (backlog):** controlled load (`E2`), public holidays, demand charges.
 
 ### The live test plan: GloBird GLOHOME Residential (Flexible Rate), CitiPower, CZ 6
