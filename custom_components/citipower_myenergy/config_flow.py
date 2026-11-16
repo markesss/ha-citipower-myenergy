@@ -66,6 +66,7 @@ from .exceptions import (
     MyEnergyInvalidCode,
 )
 from .models import NmiInfo
+from .tariff_flow import TariffOptionsFlow
 from .tls import async_create_session
 
 _LOGGER = logging.getLogger(__name__)
@@ -306,14 +307,24 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
         return await self.async_step_user(user_input)
 
 
-class MyEnergyOptionsFlow(OptionsFlow):
-    """Tune the keep-alive interval."""
+class MyEnergyOptionsFlow(TariffOptionsFlow):
+    """Pick what to change: the keep-alive interval, or the tariff (see tariff_flow)."""
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        """Show the options."""
+        """Choose which options to change."""
+        return self.async_show_menu(step_id="init", menu_options=["keepalive", "tariff"])
+
+    async def async_step_keepalive(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Tune the keep-alive interval."""
         if user_input is not None:
+            # Merge: the options also hold the tariff, which must survive this change.
             return self.async_create_entry(
-                data={CONF_KEEPALIVE_MINUTES: int(user_input[CONF_KEEPALIVE_MINUTES])}
+                data={
+                    **self.config_entry.options,
+                    CONF_KEEPALIVE_MINUTES: int(user_input[CONF_KEEPALIVE_MINUTES]),
+                }
             )
         current = self.config_entry.options.get(CONF_KEEPALIVE_MINUTES, DEFAULT_KEEPALIVE_MINUTES)
         schema = vol.Schema(
@@ -329,4 +340,4 @@ class MyEnergyOptionsFlow(OptionsFlow):
                 )
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(step_id="keepalive", data_schema=schema)

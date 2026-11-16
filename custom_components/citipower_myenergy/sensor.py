@@ -2,24 +2,41 @@
 
 The Energy dashboard reads the imported statistics directly; these sensors
 are for seeing at a glance how fresh the data is and whether the session is
-still alive.
+still alive. When a tariff is set up, three more follow the retailer's clock for automations:
+the current period, its rate, and when the period next changes. They are not polled; a timer
+wakes them at each boundary.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
+from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import EntityCategory, UnitOfEnergy
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
+from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.helpers.event import async_track_point_in_utc_time
+from homeassistant.util import dt as dt_util
 
-from .const import CONF_ADDRESS, CONF_COMPANY, DOMAIN, MARKET_TZ
+from .const import MARKET_TZ
 from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
+from .entity import MyEnergyEntity, device_info
 from .statistics import channel_label
+from .tariff import (
+    KIND_IMPORT,
+    SCAN_HOURS,
+    PeriodRate,
+    Tariff,
+    next_period_change,
+    period_slugs,
+    rate_at,
+)
+
+# Every sensor reads data the coordinator (or the tariff timeline) already holds and makes no
+# request of its own, so there is nothing to limit.
+PARALLEL_UPDATES = 0
 
 
 async def async_setup_entry(
@@ -43,32 +60,19 @@ async def async_setup_entry(
         if new:
             async_add_entities(new)
 
+    tariff = coordinator.load_tariff()
+    if tariff is not None:
+        timeline = TariffTimeline(hass, tariff)
+        entry.async_on_unload(timeline.async_stop)
+        entities += [
+            TariffPeriodSensor(coordinator, timeline),
+            TariffRateSensor(coordinator, timeline),
+            TariffNextChangeSensor(coordinator, timeline),
+        ]
+
     async_add_entities(entities)
     _add_channels()
     entry.async_on_unload(coordinator.async_add_listener(_add_channels))
-
-
-class MyEnergyEntity(CoordinatorEntity[MyEnergyCoordinator]):
-    """Common device information."""
-
-    _attr_has_entity_name = True
-
-    def __init__(self, coordinator: MyEnergyCoordinator, key: str) -> None:
-        """Attach to the NMI's device."""
-        super().__init__(coordinator)
-        entry = coordinator.config_entry
-        self._attr_unique_id = f"{coordinator.nmi}_{key}"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, coordinator.nmi)},
-            name=f"myEnergy {coordinator.site_name}",
-            manufacturer=entry.data.get(CONF_COMPANY) or "CitiPower / Powercor",
-            model="Smart meter",
-            serial_number=coordinator.nmi,
-            suggested_area=None,
-            entry_type=DeviceEntryType.SERVICE,
-            configuration_url="https://myenergy.powercor.com.au/s/energy-usage",
-        )
-        self._address = entry.data.get(CONF_ADDRESS)
 
 
 class LatestDataSensor(MyEnergyEntity, SensorEntity):
@@ -175,3 +179,191 @@ class SessionSensor(MyEnergyEntity, SensorEntity):
             "keepalive_minutes": round(c.keepalive_interval.total_seconds() / 60),
             "expired_at": c.session_dead_since.isoformat() if c.session_dead_since else None,
         }
+
+
+# --- Live tariff sensors ---------------------------------------------------------------
+
+
+class TariffTimeline:
+    """Knows which tariff period it is and wakes its sensors exactly when that changes.
+
+    One timer, set for the next boundary, so nothing polls. Entities read the answer as of the
+    last boundary; the timeline rewrites them after each one. When nothing changes within the
+    scan horizon (a flat tariff, or the next version is further away) it looks again before
+    the horizon runs out, so a tariff version that starts later is still picked up.
+    """
+
+    def __init__(self, hass: HomeAssistant, tariff: Tariff) -> None:
+        """Work out the current period; the first listener starts the timer."""
+        self._hass = hass
+        self.tariff = tariff
+        self.currency = hass.config.currency
+        self.slugs = period_slugs(tariff)
+        self.period_names = list(self.slugs)
+        self._listeners: list[Callable[[], None]] = []
+        self._cancel: CALLBACK_TYPE | None = None
+        self._stopped = False
+        self._boundary: datetime | None = None
+        self._now = dt_util.utcnow()
+        self.current: PeriodRate | None = None
+        self.upcoming: tuple[datetime, PeriodRate | None] | None = None
+        self._refresh(self._now)
+
+    @callback
+    def async_add_listener(self, listener: Callable[[], None]) -> CALLBACK_TYPE:
+        """Call ``listener`` after every boundary; the first listener starts the timer."""
+        self._listeners.append(listener)
+        if self._cancel is None and not self._stopped:
+            self._schedule()
+
+        @callback
+        def _remove() -> None:
+            if listener in self._listeners:
+                self._listeners.remove(listener)
+
+        return _remove
+
+    @callback
+    def async_stop(self) -> None:
+        """Cancel the timer (the entry is unloading)."""
+        self._stopped = True
+        if self._cancel is not None:
+            self._cancel()
+            self._cancel = None
+
+    def _refresh(self, moment: datetime) -> None:
+        self._now = moment
+        self.current = rate_at(self.tariff, moment, KIND_IMPORT)
+        change = next_period_change(self.tariff, moment, KIND_IMPORT)
+        self.upcoming = (
+            None if change is None else (change[0], rate_at(self.tariff, change[0], KIND_IMPORT))
+        )
+
+    def _schedule(self) -> None:
+        if self.upcoming is not None:
+            self._boundary = self.upcoming[0]
+        else:
+            self._boundary = self._now + timedelta(hours=SCAN_HOURS - 24)
+        self._cancel = async_track_point_in_utc_time(self._hass, self._fire, self._boundary)
+
+    @callback
+    def _fire(self, _when: datetime) -> None:
+        self._cancel = None
+        if self._stopped:
+            return
+        # The boundary itself, unless the timer ran late (the system slept).
+        self._refresh(max(self._boundary or dt_util.utcnow(), dt_util.utcnow()))
+        self._schedule()
+        for listener in list(self._listeners):
+            listener()
+
+
+class TariffEntity(SensorEntity):
+    """Common base: attached to the NMI's device and refreshed by the timeline."""
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(
+        self, coordinator: MyEnergyCoordinator, timeline: TariffTimeline, key: str
+    ) -> None:
+        """Attach to the NMI's device."""
+        self._timeline = timeline
+        self._attr_unique_id = f"{coordinator.nmi}_{key}"
+        self._attr_device_info = device_info(coordinator)
+
+    async def async_added_to_hass(self) -> None:
+        """Rewrite the state at each period boundary."""
+        self.async_on_remove(self._timeline.async_add_listener(self.async_write_ha_state))
+
+
+class TariffPeriodSensor(TariffEntity):
+    """The tariff period in force now, for automations that react to it changing."""
+
+    _attr_translation_key = "tariff_period"
+    _attr_device_class = SensorDeviceClass.ENUM
+
+    def __init__(self, coordinator: MyEnergyCoordinator, timeline: TariffTimeline) -> None:
+        """Create the sensor."""
+        super().__init__(coordinator, timeline, "tariff_period")
+        self._attr_options = list(timeline.period_names)
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the current period's name."""
+        current = self._timeline.current
+        return None if current is None else current.period.name
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Give the rates now and for the next period."""
+        current = self._timeline.current
+        upcoming = self._timeline.upcoming
+        following = upcoming[1] if upcoming else None
+        return {
+            "rate_c_per_kwh": None if current is None else current.c_per_kwh,
+            "rate_after_discount_c_per_kwh": (
+                None if current is None else current.discounted_c_per_kwh
+            ),
+            "tiered": None if current is None else current.tiered,
+            "period_slug": (
+                None if current is None else self._timeline.slugs.get(current.period.name)
+            ),
+            "next_period": None if following is None else following.period.name,
+            "next_rate_c_per_kwh": None if following is None else following.c_per_kwh,
+            "next_period_starts": (dt_util.as_local(upcoming[0]).isoformat() if upcoming else None),
+        }
+
+
+class TariffRateSensor(TariffEntity):
+    """The headline import rate now, in currency per kWh (GST included, before any discount)."""
+
+    _attr_translation_key = "tariff_rate"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 4
+
+    def __init__(self, coordinator: MyEnergyCoordinator, timeline: TariffTimeline) -> None:
+        """Create the sensor; the unit follows Home Assistant's currency."""
+        super().__init__(coordinator, timeline, "tariff_rate")
+        self._attr_native_unit_of_measurement = f"{timeline.currency}/kWh"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the rate in dollars per kWh."""
+        current = self._timeline.current
+        return None if current is None else round(current.c_per_kwh / 100, 6)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Say which period it is and what the rate is after the discount."""
+        current = self._timeline.current
+        if current is None:
+            return {}
+        return {
+            "period": current.period.name,
+            "rate_after_discount": round(current.discounted_c_per_kwh / 100, 6),
+        }
+
+
+class TariffNextChangeSensor(TariffEntity):
+    """When the period next changes, for a trigger a few minutes ahead of it."""
+
+    _attr_translation_key = "tariff_next_change"
+    _attr_device_class = SensorDeviceClass.TIMESTAMP
+
+    def __init__(self, coordinator: MyEnergyCoordinator, timeline: TariffTimeline) -> None:
+        """Create the sensor."""
+        super().__init__(coordinator, timeline, "tariff_next_change")
+
+    @property
+    def native_value(self) -> datetime | None:
+        """Return the start of the next different period."""
+        upcoming = self._timeline.upcoming
+        return None if upcoming is None else upcoming[0]
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Name the period that starts then."""
+        upcoming = self._timeline.upcoming
+        following = upcoming[1] if upcoming else None
+        return {"next_period": None if following is None else following.period.name}

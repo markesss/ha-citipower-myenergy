@@ -41,4 +41,24 @@ jobs:
           python-version: "3.13"
       - run: pip install -r requirements-dev.txt
       - run: ruff check custom_components tests
-      - run: pytest -q
+      # One run does both jobs: the tests, and the numbers for the Silver quality-scale rule
+      # test-coverage (every module over 95%, branches included).
+      - name: pytest with coverage
+        run: >
+          pytest -q --cov=custom_components/citipower_myenergy --cov-branch
+          --cov-report=term-missing --cov-report=xml --cov-report=html
+      # Prints the per-module table, adds it to the job summary where one exists (GitHub; the
+      # script skips it when GITHUB_STEP_SUMMARY is unset) and fails if any module is under the
+      # bar. The bar is MIN_COVERAGE_PERCENT in the script.
+      - name: Coverage per module
+        run: python scripts/coverage_summary.py coverage.xml
+      # Gitea Actions does not implement the artifact service that upload-artifact v4 needs.
+      - name: Upload coverage report
+        if: ${{ !cancelled() && github.server_url == 'https://github.com' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            coverage.xml
+            htmlcov/
+          if-no-files-found: warn

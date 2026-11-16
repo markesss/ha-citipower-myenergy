@@ -92,6 +92,19 @@ CONF_DESCRIPTION = "description"
 CONF_COMPANY = "company"
 CONF_SIGNED_IN_AT = "signed_in_at"
 CONF_KEEPALIVE_MINUTES = "keepalive_minutes"
+# The user's tariff, as Tariff.to_dict() (JSON-safe), in entry.options. Absent means cost
+# tracking is off.
+CONF_TARIFF = "tariff"
+# Opt-in (default off): also write a kWh and a cost statistic per import tariff period, so the
+# Energy dashboard can draw each period as its own coloured grid source. Needs a tariff.
+CONF_PERIOD_STATS = "period_statistics"
+# Only with per-period statistics on a time-of-use tariff: how the daily supply charge shows in
+# the per-period COST statistics. Absent means SUPPLY_NONE, which is what they always did.
+CONF_SUPPLY_MODE = "supply_in_periods"
+SUPPLY_NONE = "none"  # period costs exclude the supply charge
+SUPPLY_SPREAD = "spread"  # the day's supply charge divided equally over its hours
+SUPPLY_FIRST_HOUR = "first_hour"  # all of it on the first hour of the local day
+SUPPLY_MODES = (SUPPLY_NONE, SUPPLY_SPREAD, SUPPLY_FIRST_HOUR)
 CONF_MFA_METHOD = "mfa_method"
 CONF_CODE = "code"
 CONF_RESEND = "resend"

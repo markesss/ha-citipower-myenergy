@@ -1,0 +1,196 @@
+# Home Assistant Integration Quality Scale: self-audit for CitiPower & Powercor myEnergy.
+# https://contributors.home-assistant.io/core/quality-scale/
+#
+# This is a CUSTOM integration. The scale's pages are written for core integrations and never
+# mention custom ones, so this file is a self-audit: Home Assistant does not enforce it for
+# `custom_components`. hassfest does read it once the manifest has a quality_scale key: it
+# accepted "bronze" and this file in a Gitea run on 16 Nov 2026.
+# Statuses: done (followed), todo (not yet), exempt (does not apply; a comment says why).
+# A tier is earned only when every rule of that tier and of the tiers below is done or exempt.
+#
+# Graded 16 Nov 2026. Every Bronze and Silver rule is done or exempt, so Silver is met on this
+# self-audit. Gold is blocked by docs-supported-devices, entity-translations,
+# exception-translations and icon-translations; Platinum also by strict-typing.
+# tests/test_quality_scale.py keeps this file's structure honest (every rule present once, valid
+# statuses, a reason for every exemption, and a manifest tier the audit supports).
+#
+# Manifest state and what moving up a tier needs:
+#   - manifest.json has "quality_scale": "silver" (after "issue_tracker", before "requirements":
+#     hassfest wants domain, name, then the rest alphabetically). Accepted values are bronze,
+#     silver, gold, platinum, internal, legacy, custom and no_score.
+#   - "codeowners" lists an owner, which Silver and above require (integration-owner).
+#   - To claim Gold: change the key to "gold" in the same change that gets every Gold rule to
+#     done or exempt, and run hassfest (Gitea or GitHub) before tagging.
+#   - hassfest validates this file once the key is set: every rule slug must be present and
+#     spelled exactly, a status must be one of the three, and every exempt rule needs a comment.
+
+rules:
+  # --- Bronze --------------------------------------------------------------------------
+  action-setup:
+    status: exempt
+    comment: The integration registers no actions (services).
+  appropriate-polling:
+    status: done
+    comment: A 4-hour poll (the portal publishes one new day each morning). The 45-minute keep-alive is a session need, not data polling.
+  brands:
+    status: done
+    comment: Original images ship in the integration's brand/ folder (icon, logo, dark logo), which Home Assistant reads directly from 2026.3 and which is served at /api/brands/integration/citipower_myenergy/. Not submitted to the home-assistant/brands repository; whether that satisfies this rule for a custom integration is not confirmed.
+  common-modules:
+    status: done
+    comment: The coordinator is in coordinator.py and the shared entity base and device info are in entity.py.
+  config-flow:
+    status: done
+    comment: Set up from the UI (email and password, the code by email or SMS, the NMI), with reauth and an options flow.
+  config-flow-test-coverage:
+    status: done
+    comment: config_flow.py is at 100% of lines and branches, and every error path is followed by a recovery test.
+  dependency-transparency:
+    status: exempt
+    comment: The manifest has no external requirements; the portal is spoken to with aiohttp from Home Assistant.
+  docs-actions:
+    status: exempt
+    comment: No actions.
+  docs-conditions:
+    status: exempt
+    comment: The integration provides no conditions.
+  docs-high-level-description:
+    status: done
+    comment: README introduction.
+  docs-installation-instructions:
+    status: done
+    comment: README Install section (HACS custom repository, then adding the integration).
+  docs-removal-instructions:
+    status: done
+    comment: README Removing the integration section, including what is kept.
+  docs-triggers:
+    status: exempt
+    comment: The integration provides no triggers.
+  entity-event-setup:
+    status: done
+    comment: The tariff sensors subscribe in async_added_to_hass and unsubscribe through async_on_remove; the other entities are coordinator-driven.
+  entity-unique-id:
+    status: done
+    comment: Every entity has a unique id of the form <nmi>_<key>.
+  has-entity-name:
+    status: done
+    comment: has_entity_name is True on every entity.
+  runtime-data:
+    status: done
+    comment: The coordinator is stored in ConfigEntry.runtime_data.
+  test-before-configure:
+    status: done
+    comment: The config flow signs in and lists the NMIs before it creates an entry.
+  test-before-setup:
+    status: done
+    comment: async_config_entry_first_refresh runs in setup; auth errors become ConfigEntryAuthFailed and other portal errors become UpdateFailed (so ConfigEntryNotReady).
+  unique-config-entry:
+    status: done
+    comment: The NMI is the unique id and a second entry for it is aborted.
+
+  # --- Silver --------------------------------------------------------------------------
+  action-exceptions:
+    status: done
+    comment: The Refresh data button raises HomeAssistantError when its poll fails; there are no actions.
+  config-entry-unloading:
+    status: done
+    comment: Platforms unload, and the keep-alive, update listener and sensor timers are cancelled through async_on_unload.
+  docs-configuration-parameters:
+    status: done
+    comment: README sections on the keep-alive interval and the tariff options.
+  docs-installation-parameters:
+    status: done
+    comment: README Install steps list every field asked for during setup.
+  entity-unavailable:
+    status: done
+    comment: Coordinator entities become unavailable when the data is unavailable. The session sensor and the Refresh data button stay available on purpose, so an ended session can be seen and retried.
+  integration-owner:
+    status: done
+    comment: manifest.json lists an owner in codeowners.
+  log-when-unavailable:
+    status: done
+    comment: The coordinator logs a failed update once and its recovery once. The keep-alive logs the end of a session once as a warning and then stops.
+  parallel-updates:
+    status: done
+    comment: sensor.py sets PARALLEL_UPDATES to 0 (every sensor reads data already held) and button.py sets it to 1 (a press polls the portal).
+  reauthentication-flow:
+    status: done
+    comment: async_step_reauth and reauth_confirm, tested, including a different account being refused.
+  test-coverage:
+    status: done
+    comment: Every module is over 95% with branch coverage on (total 98%, lowest module 95.8%). The tests job in .github/workflows/validate.yml measures it on every run and fails if any module drops under the bar (scripts/coverage_summary.py).
+
+  # --- Gold ----------------------------------------------------------------------------
+  devices:
+    status: done
+    comment: One device per NMI with its entities grouped under it.
+  diagnostics:
+    status: done
+    comment: diagnostics.py redacts the NMI, address and cookies, and includes a tariff summary and the last statistics writes.
+  discovery:
+    status: exempt
+    comment: A cloud account login; there is nothing on the network to discover.
+  discovery-update-info:
+    status: exempt
+    comment: No discovery.
+  docs-data-update:
+    status: done
+    comment: README says the portal publishes the previous day each morning and the integration refreshes every 4 hours.
+  docs-examples:
+    status: done
+    comment: README Sensors for automations has example automations.
+  docs-known-limitations:
+    status: done
+    comment: README Limitations section.
+  docs-supported-devices:
+    status: todo
+    comment: There is no section stating which networks and meters work (CitiPower and Powercor are supported, United Energy is not). It is one bullet under Limitations.
+  docs-supported-functions:
+    status: done
+    comment: README Entities table.
+  docs-troubleshooting:
+    status: done
+    comment: README Troubleshooting and If a cost looks wrong.
+  docs-use-cases:
+    status: done
+    comment: README Energy dashboard, Cost tracking and Sensors for automations.
+  dynamic-devices:
+    status: exempt
+    comment: One fixed device per entry. Per-channel sensors (E1, B1) are added as channels appear.
+  entity-category:
+    status: done
+    comment: The session sensor is a diagnostic entity.
+  entity-device-class:
+    status: done
+    comment: Timestamp, energy and enum device classes are set where they fit.
+  entity-disabled-by-default:
+    status: exempt
+    comment: Every entity is wanted by most users. The session sensor is how an expired session is noticed, so it stays enabled on purpose.
+  entity-translations:
+    status: todo
+    comment: The latest-day energy sensor sets its name in Python. Give it a translation key with a channel placeholder.
+  exception-translations:
+    status: todo
+    comment: strings.json has no exceptions section; the button and the coordinator raise plain-text errors.
+  icon-translations:
+    status: todo
+    comment: There is no icons.json.
+  reconfiguration-flow:
+    status: exempt
+    comment: The only settings are the credentials (changed through reauth) and the NMI (the entry's identity, so a change is a new entry). The keep-alive and tariff are in the options flow. A reconfigure that signs in again is optional.
+  repair-issues:
+    status: done
+    comment: A Repairs notice, with a fix that reprices history, is raised when a running total stops joining up.
+  stale-devices:
+    status: exempt
+    comment: A single fixed device per entry.
+
+  # --- Platinum ------------------------------------------------------------------------
+  async-dependency:
+    status: exempt
+    comment: There is no external library; the code uses aiohttp asynchronously.
+  inject-websession:
+    status: exempt
+    comment: The portal omits its TLS intermediate certificate, so the integration builds its own session (tls.async_create_session) with the certificate bundled; Home Assistant's shared session fails verification. Judgement call.
+  strict-typing:
+    status: todo
+    comment: A lenient mypy --strict run reports 22 errors in 7 files, and there is no mypy configuration or py.typed marker.

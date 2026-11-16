@@ -14,3 +14,11 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "W", "F", "I", "UP", "B"]
+
+[tool.coverage.run]
+branch = true
+source = ["custom_components/citipower_myenergy"]
+
+[tool.coverage.report]
+show_missing = true
+# No omit list and no exclusions: every module counts, test files are outside the source.

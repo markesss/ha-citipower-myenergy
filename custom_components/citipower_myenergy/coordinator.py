@@ -16,8 +16,11 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import MyEnergyApi
+from .chain_guard import guard_for
 from .const import (
     CONF_KEEPALIVE_MINUTES,
+    CONF_PERIOD_STATS,
+    CONF_TARIFF,
     DEFAULT_KEEPALIVE_MINUTES,
     DOMAIN,
     KEEPALIVE_RETRY,
@@ -26,11 +29,18 @@ from .const import (
     REFRESH_WINDOW_DAYS,
     UPDATE_INTERVAL,
 )
-from .exceptions import MyEnergyAuthError, MyEnergyError
+from .exceptions import MyEnergyAuthError, MyEnergyError, TariffError
 from .models import AccountInfo
-from .nem12 import daily_total
+from .nem12 import Channel, daily_total
 from .session_store import SessionStore
-from .statistics import async_insert_channel, async_last_stat_start, statistic_id_for
+from .statistics import (
+    async_insert_channel,
+    async_insert_cost,
+    async_insert_period_statistics,
+    async_last_stat_start,
+    statistic_id_for,
+)
+from .tariff import Tariff, supply_mode_of
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -82,6 +92,8 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         self.site_name = name
         self._store = store
         self._signed_in_at = signed_in_at
+        # The repair notice for a cost statistic that does not join is per entry.
+        guard_for(hass, nmi).entry_id = entry.entry_id
         self._cancel_keepalive: Callable[[], None] | None = None
         self._last_contact: datetime | None = None
         self.last_keepalive: datetime | None = None
@@ -122,10 +134,16 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         except MyEnergyError as err:
             raise UpdateFailed(str(err)) from err
 
+        tariff = self.load_tariff()
+        period_stats = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
         for suffix, channel in channels.items():
             data.hours_added += await async_insert_channel(
                 self.hass, self.nmi, self.site_name, channel
             )
+            if tariff is not None:
+                await self._async_insert_cost(channel, tariff)
+                if period_stats:
+                    await self._async_insert_period_statistics(channel, tariff)
             last_day = channel.last_day
             data.channels[suffix] = ChannelSummary(
                 suffix=suffix,
@@ -137,6 +155,48 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         await self._store.async_save_suffixes(self.config_entry.entry_id, list(channels))
         await self._async_save_session()
         return data
+
+    def load_tariff(self) -> Tariff | None:
+        """Return the user's tariff, or None when cost tracking is off or the tariff is bad."""
+        stored = self.config_entry.options.get(CONF_TARIFF)
+        if not stored:
+            return None
+        try:
+            return Tariff.from_dict(stored)
+        except TariffError as err:
+            _LOGGER.warning("Ignoring the saved tariff for %s: %s", self.site_name, err)
+            return None
+
+    async def _async_insert_cost(self, channel: Channel, tariff: Tariff) -> None:
+        """Record a channel's cost; never let a pricing problem stop the kWh import."""
+        try:
+            await async_insert_cost(self.hass, self.nmi, self.site_name, channel, tariff)
+        except TariffError as err:
+            _LOGGER.warning("Could not price %s for %s: %s", channel.suffix, self.site_name, err)
+        except Exception:
+            _LOGGER.exception("Unexpected error recording %s cost for %s", channel.suffix, self.nmi)
+
+    async def _async_insert_period_statistics(self, channel: Channel, tariff: Tariff) -> None:
+        """Record per-period statistics; like cost, never let them stop the kWh import."""
+        try:
+            await async_insert_period_statistics(
+                self.hass,
+                self.nmi,
+                self.site_name,
+                channel,
+                tariff,
+                supply_mode=supply_mode_of(self.config_entry.options),
+            )
+        except TariffError as err:
+            _LOGGER.warning(
+                "Could not price %s per period for %s: %s", channel.suffix, self.site_name, err
+            )
+        except Exception:
+            _LOGGER.exception(
+                "Unexpected error recording %s per-period statistics for %s",
+                channel.suffix,
+                self.nmi,
+            )
 
     async def _async_fetch_start(self, account: AccountInfo, end: date) -> date:
         """Decide how far back this poll needs to read."""

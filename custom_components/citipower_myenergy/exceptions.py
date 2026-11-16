@@ -31,6 +31,10 @@ class MyEnergyApiError(MyEnergyError):
     """The portal returned something unexpected."""
 
 
+class TariffError(MyEnergyError):
+    """A tariff is malformed or cannot be applied to the data given."""
+
+
 def cannot_connect(err: BaseException) -> MyEnergyCannotConnect:
     """Describe a transport failure, including timeouts that carry no message."""
     reason = str(err) or (

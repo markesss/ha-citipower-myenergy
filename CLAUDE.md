@@ -54,12 +54,25 @@ custom_components/citipower_myenergy/
   tls.py            HTTP sessions with the portal's missing TLS intermediate (certs/)
   coordinator.py    DataUpdateCoordinator + keep-alive loop + reauth trigger
   config_flow.py    user → method (email/SMS) → code → nmi; reauth; options
-  sensor.py         latest data, latest-day kWh per channel, session status
+  sensor.py         latest data, latest-day kWh per channel, session status; with a tariff,
+                    live period / rate / next-change sensors on one boundary timer (TariffTimeline)
+  entity.py         shared entity base (MyEnergyEntity, device_info) for sensor and button
+  quality_scale.yaml  self-audit against the HA quality scale (custom integration: not enforced)
+  brand/            icon and logo images, read directly by Home Assistant (2026.3 and later)
+  button.py         Refresh data button: an immediate poll, always available, raises on failure
   diagnostics.py    redacted diagnostics
+  tariff.py         PURE: tariff model + per-day pricing on a selectable clock, per-period breakdown with supply-charge modes, slugs
+  tariff_form.py    PURE: helpers for the tariff options flow (form <-> dict, review text)
+  tariff_flow.py    HA: the tariff steps of the options flow (menu-driven)
+  chain_guard.py    HA: per-NMI write lock, last-20-writes trail, broken-chain repair notice
+  reprice.py        HA: reprice an entry's history (options flow and the Repairs fix share it)
+  repairs.py        HA: the Repairs fix flow for a cost statistic that does not join
+  (cost statistics and the opt-in per-period statistics live in statistics.py)
 tests/
   fixtures/         anonymised real portal responses (see docs/TESTING.md)
   test_portal.py    pure
   test_nem12.py     pure
+  test_tariff*.py   pure (tariff pricing, per-period breakdown, form helpers)
   test_ha_*.py      need pytest-homeassistant-custom-component
 ```
 
@@ -77,9 +90,18 @@ tests/
   Never commit a HAR. Never paste one into a file in this repo. See
   `docs/TESTING.md` → *Capturing new portal traffic*.
 - **NEM12 times are market time (AEST, UTC+10, no DST).** Use
-  `const.MARKET_TZ`, never `Australia/Melbourne`, for interval timestamps.
+  `const.MARKET_TZ`, never `Australia/Melbourne`, for interval timestamps. The *tariff's*
+  pricing clock is a separate, user-selectable setting (`tariff.py`: whole-hour Australian
+  zones plus GMT; a version with no zone means fixed AEST), so a tariff day can be 23 or 25
+  hours. Never use it to read meter data, and never assume a tariff day has 24 hours.
 - **The statistics running sum must never double-count.** Any change to
   `statistics.py` needs a test in `test_ha_statistics.py`.
+- **Statistics writes take the NMI's lock and wait for the recorder.** Every public write
+  in `statistics.py` runs under `chain_guard.guard_for(hass, nmi).lock`; never call
+  `async_add_external_statistics` for these statistics from elsewhere, and never read a
+  starting total without `_async_settled`. `_async_write_series` checks that the stored
+  window joins the row before it (running total = previous total + own state); keep that.
+  Logs and the write trail name a statistic by its short label, never the NMI.
 - **All portal traffic goes through `tls.async_create_session`.** The portal omits its
   TLS intermediate certificate, so HA's own client session fails verification. Never
   disable verification to work around it.

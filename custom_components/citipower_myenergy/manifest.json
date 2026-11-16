@@ -1,7 +1,12 @@
 {
   "domain": "citipower_myenergy",
   "name": "CitiPower & Powercor myEnergy",
-  "codeowners": [],
+  "categories": [
+    "energy.meters_monitoring"
+  ],
+  "codeowners": [
+    "@markesss"
+  ],
   "config_flow": true,
   "dependencies": [
     "recorder"
@@ -10,6 +15,7 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/markesss/ha-citipower-myenergy/issues",
+  "quality_scale": "silver",
   "requirements": [],
-  "version": "0.1.2"
+  "version": "0.2.0"
 }
