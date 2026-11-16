@@ -39,7 +39,7 @@ from .statistics import (
     async_last_stat_start,
     statistic_id_for,
 )
-from .tariff import Tariff
+from .tariff import Tariff, supply_mode_of
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -131,7 +131,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         except MyEnergyError as err:
             raise UpdateFailed(str(err)) from err
 
-        tariff = self._load_tariff()
+        tariff = self.load_tariff()
         period_stats = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
         for suffix, channel in channels.items():
             data.hours_added += await async_insert_channel(
@@ -153,7 +153,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         await self._async_save_session()
         return data
 
-    def _load_tariff(self) -> Tariff | None:
+    def load_tariff(self) -> Tariff | None:
         """Return the user's tariff, or None when cost tracking is off or the tariff is bad."""
         stored = self.config_entry.options.get(CONF_TARIFF)
         if not stored:
@@ -177,7 +177,12 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         """Record per-period statistics; like cost, never let them stop the kWh import."""
         try:
             await async_insert_period_statistics(
-                self.hass, self.nmi, self.site_name, channel, tariff
+                self.hass,
+                self.nmi,
+                self.site_name,
+                channel,
+                tariff,
+                supply_mode=supply_mode_of(self.config_entry.options),
             )
         except TariffError as err:
             _LOGGER.warning(

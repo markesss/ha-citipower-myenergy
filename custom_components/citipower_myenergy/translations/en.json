@@ -202,9 +202,17 @@
       },
       "tariff_period_stats": {
         "title": "Statistics per tariff period",
-        "description": "Gives every import period its own kWh and cost statistics, so the Energy dashboard can draw each period as its own grid source in its own colour. Turning this on works out your whole stored history, which can take a minute. The combined statistics are not changed.\n\n**To use them:**\n1. In Settings > Dashboards > Energy, add one grid consumption source per period below. For each, pick its kWh statistic and, under cost, choose \"Use an entity tracking the total costs\" and pick the matching cost statistic.\n2. Remove your combined grid source (or turn off its cost). Using it alongside these sources counts your energy and cost twice.\n3. These costs leave out the daily supply charge, and Home Assistant does not apply its daily cost adjustment to sources set up this way, so the supply charge will not appear in the dashboard's cost. Leave the daily cost adjustment at 0. To see your full cost including the supply charge, use the combined cost statistic instead (not these sources).\n\n{details}\n\nRenaming or removing a period stops its statistics being written but leaves the old ones in place; clear them in Developer Tools > Statistics if you no longer want them. Turning this off keeps everything already written.",
+        "description": "Gives every import period its own kWh and cost statistics, so the Energy dashboard can draw each period as its own grid source in its own colour. Turning this on works out your whole stored history, which can take a minute. The combined statistics are not changed.\n\n**To use them:**\n1. In Settings > Dashboards > Energy, add one grid consumption source per period below. For each, pick its kWh statistic and, under cost, choose \"Use an entity tracking the total costs\" and pick the matching cost statistic.\n2. Remove your combined grid source (or turn off its cost). Using it alongside these sources counts your energy and cost twice.\n3. Home Assistant does not apply its own daily cost adjustment to sources set up this way, so leave the daily cost adjustment at 0 on every one of them. By default these costs leave out the daily supply charge. If your tariff has more than one period, the next step lets you put the supply charge into the period costs instead. To see your full cost including the supply charge without that, use the combined cost statistic (not these sources).\n\n{details}\n\nRenaming or removing a period stops its statistics being written but leaves the old ones in place; clear them in Developer Tools > Statistics if you no longer want them. Turning this off keeps everything already written.",
         "data": {
           "enabled": "Record statistics for each tariff period"
+        }
+      },
+      "tariff_supply_mode": {
+        "title": "Supply charge in period costs",
+        "description": "Home Assistant does not apply its daily cost adjustment to the period sources, so the daily supply charge ({daily_supply}) does not reach the dashboard unless it is built into the period costs. Choose where it goes. Leave the daily cost adjustment in the Energy dashboard at 0 either way.\n\n**Left out:** the period costs are only usage times rate, and the supply charge is not shown. The combined cost statistic (not these sources) still has your full cost.\n\n**Spread over the day:** every hour carries an equal share of the supply charge, so the period costs add up to your full daily cost and the hourly chart stays smooth.\n\n**On the first hour of the day:** the whole supply charge lands on the first hour of each day, in whichever period covers it. The totals match your full cost, with a step at that hour.\n\nWith either of the last two, a period's cost divided by its kWh reads higher than its tariff rate, because it includes part of the supply charge.\n\nIf you change the choice, leave the box ticked to rewrite the recorded period costs now (this can take a minute). If you untick it, the choice is saved but older days keep their old costs until you run \"Recalculate cost history\".",
+        "data": {
+          "supply_mode": "Supply charge in period costs",
+          "reprice_history": "Recalculate period costs now"
         }
       },
       "tariff_recalculate": {
@@ -240,6 +248,15 @@
       "latest_data": {
         "name": "Latest data"
       },
+      "tariff_period": {
+        "name": "Current tariff period"
+      },
+      "tariff_rate": {
+        "name": "Current tariff rate"
+      },
+      "tariff_next_change": {
+        "name": "Next tariff period starts"
+      },
       "session": {
         "name": "Session",
         "state": {
@@ -254,6 +271,13 @@
       "options": {
         "flat": "Flat rate",
         "tou": "Time of use"
+      }
+    },
+    "supply_mode": {
+      "options": {
+        "none": "Left out of the period costs",
+        "spread": "Spread equally over every hour of the day",
+        "first_hour": "All on the first hour of the day"
       }
     },
     "weekday": {

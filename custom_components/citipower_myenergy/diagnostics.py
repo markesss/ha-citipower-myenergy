@@ -18,7 +18,7 @@ from .const import (
 )
 from .coordinator import MyEnergyConfigEntry
 from .exceptions import TariffError
-from .tariff import Tariff, period_slugs
+from .tariff import Tariff, period_slugs, supply_mode_of
 
 TO_REDACT = {CONF_COOKIES, CONF_ADDRESS, CONF_NMI, CONF_NMI_ID, CONF_NMI_ASSIGN_ID}
 
@@ -40,6 +40,7 @@ def _cost_tracking(entry: MyEnergyConfigEntry) -> dict[str, Any]:
     # A zone is a setting, not an identifier. Unset (fixed AEST) reads as Australia/Brisbane.
     summary["timezone"] = tariff.zone_name
     summary["timezone_set"] = any(version.timezone for version in tariff.versions)
+    summary["supply_mode"] = supply_mode_of(entry.options)
     summary["versions"] = [
         {
             "effective_from": version.effective_from.isoformat(),

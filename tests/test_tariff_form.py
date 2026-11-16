@@ -454,7 +454,7 @@ def test_period_statistics_text_gives_the_daily_supply_for_reference_and_the_sta
     # 92.40 c x 0.97 (3% discount, prices already include GST) = $0.89628, shown for reference
     # only: Home Assistant does not apply its daily cost adjustment to per-period sources.
     assert "AUD 0.89628" in text
-    assert "for reference only" in text
+    assert "Daily supply charge: AUD" in text
     assert "not included in these period costs" in text
     assert "to enter" not in text
     assert "92.40 c/day supply charge less the 3% discount" in text
@@ -493,20 +493,40 @@ def test_period_statistics_step_has_its_strings() -> None:
     assert "{details}" in step["description"]
     assert step["data"]["enabled"]
     assert "tariff_period_stats" in steps["tariff"]["menu_options"]
-    # It must warn about the double count, say the supply charge is not applied in this mode,
-    # tell the user to leave the dashboard's adjustment at 0 and point to the combined statistic.
+    # It must warn about the double count, say the dashboard does not apply its own daily
+    # adjustment to these sources (so leave it at 0), say the supply charge is left out unless the
+    # next step puts it in, and point to the combined statistic.
     text = step["description"]
     for phrase in (
         "twice",
-        "does not apply its daily cost adjustment",
-        "will not appear",
-        "Leave the daily cost adjustment at 0",
+        "does not apply its own daily cost adjustment",
+        "leave the daily cost adjustment at 0",
+        "leave out the daily supply charge",
+        "the next step lets you put the supply charge into the period costs",
         "combined cost statistic",
     ):
         assert phrase in text
     # The superseded advice (enter the adjustment on one source) must be gone.
     for gone in ("one grid source only", "fixed number", "Enter the amount below"):
         assert gone not in text
+
+
+def test_the_supply_mode_step_has_its_strings() -> None:
+    strings = _strings()
+    step = strings["options"]["step"]["tariff_supply_mode"]
+    assert "{daily_supply}" in step["description"]
+    assert step["data"]["supply_mode"]
+    assert step["data"]["reprice_history"]
+    for phrase in (
+        "Left out",
+        "Spread over the day",
+        "On the first hour of the day",
+        "divided by its kWh reads higher than its tariff rate",
+        "Leave the daily cost adjustment in the Energy dashboard at 0",
+        "Recalculate cost history",
+    ):
+        assert phrase in step["description"]
+    assert set(strings["selector"]["supply_mode"]["options"]) == {"none", "spread", "first_hour"}
 
 
 def test_the_clock_change_step_has_its_strings() -> None:

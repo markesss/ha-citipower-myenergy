@@ -18,6 +18,7 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
 
 from custom_components.citipower_myenergy.const import (
     CONF_PERIOD_STATS,
+    CONF_SUPPLY_MODE,
     CONF_TARIFF,
     DOMAIN,
     MARKET_TZ,
@@ -251,3 +252,19 @@ async def test_a_pricing_problem_in_period_statistics_is_a_warning(
     assert data.hours_added == 48
     assert "Could not price E1 per period" in caplog.text
     assert "no period covers Monday 00:00" in caplog.text
+
+
+async def test_the_coordinator_passes_the_supply_mode_to_the_period_statistics(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    for stored_mode, expected in ((None, "none"), ("spread", "spread"), ("bogus", "none")):
+        extra: dict = {CONF_PERIOD_STATS: True}
+        if stored_mode is not None:
+            extra[CONF_SUPPLY_MODE] = stored_mode
+        coordinator = _coordinator(hass, options=_flat_options(**extra))
+        spy = AsyncMock(return_value=0)
+        with patch(
+            "custom_components.citipower_myenergy.coordinator.async_insert_period_statistics", spy
+        ):
+            await coordinator._async_update_data()
+        assert spy.await_args.kwargs == {"supply_mode": expected}, stored_mode

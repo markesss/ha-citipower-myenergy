@@ -18,7 +18,12 @@ from pytest_homeassistant_custom_component.components.recorder.common import (
     async_wait_recording_done,
 )
 
-from custom_components.citipower_myenergy.const import MARKET_TZ
+from custom_components.citipower_myenergy.const import (
+    MARKET_TZ,
+    SUPPLY_FIRST_HOUR,
+    SUPPLY_NONE,
+    SUPPLY_SPREAD,
+)
 from custom_components.citipower_myenergy.nem12 import Channel
 from custom_components.citipower_myenergy.statistics import (
     async_insert_channel,
@@ -953,3 +958,220 @@ async def test_period_split_agrees_with_the_combined_statistics_across_daylight_
         supply = SUPPLY_DAY if moment in first_hours else 0.0
         periods = sum(_pair(rows, slug)[1][index]["state"] for slug in SLUGS)
         assert periods + supply == pytest.approx(row["state"], abs=2e-6), moment
+
+
+# --- Where the supply charge goes in the period costs -------------------------------------
+
+
+async def _write_all(hass: HomeAssistant, channel: Channel, tariff: Tariff, mode: str) -> None:
+    await async_insert_channel(hass, NMI, "Home", channel)
+    await async_insert_cost(hass, NMI, "Home", channel, tariff)
+    await async_insert_period_statistics(hass, NMI, "Home", channel, tariff, supply_mode=mode)
+
+
+def _cost_state(rows: dict[str, list[dict]], hour: int) -> float:
+    return sum(_pair(rows, slug)[1][hour]["state"] for slug in SLUGS)
+
+
+@pytest.mark.parametrize("mode", [SUPPLY_SPREAD, SUPPLY_FIRST_HOUR])
+async def test_supply_mode_period_costs_add_up_to_the_combined_cost_every_hour(
+    recorder_mock: Recorder, hass: HomeAssistant, mode: str
+) -> None:
+    values = [((i * 7) % 11) / 3 for i in range(96)]  # four days of uneven usage
+    channel = _channel(values)
+    await _write_all(hass, channel, _glohome(), mode)
+    rows = await _period_rows(hass)
+    combined_cost = await _stored_cost(hass)
+    for day in range(4):  # every day adds up, whichever hours carry the supply charge
+        hours = range(day * 24, day * 24 + 24)
+        assert sum(_cost_state(rows, h) for h in hours) == pytest.approx(
+            sum(combined_cost[h]["state"] for h in hours), abs=1e-4
+        )
+    if mode == SUPPLY_FIRST_HOUR:  # and then it is the combined cost, hour for hour
+        for hour in range(96):
+            assert _cost_state(rows, hour) == pytest.approx(combined_cost[hour]["state"], abs=3e-6)
+    assert sum(_pair(rows, slug)[1][-1]["sum"] for slug in SLUGS) == pytest.approx(
+        combined_cost[-1]["sum"], abs=1e-4
+    )
+    for slug in SLUGS:
+        _assert_consistent(_pair(rows, slug)[1])
+    # kWh never depends on the mode.
+    kwh = await _stored(hass)
+    for hour in range(96):
+        assert sum(_pair(rows, slug)[0][hour]["state"] for slug in SLUGS) == pytest.approx(
+            kwh[hour]["state"], abs=1e-6
+        )
+
+
+async def test_supply_mode_spread_gives_every_hour_an_equal_share(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([0.0] * 48)  # no usage, so what is stored is only the supply charge
+    await _write_all(hass, channel, _glohome(), SUPPLY_SPREAD)
+    rows = await _period_rows(hass)
+    for hour in range(48):
+        assert _cost_state(rows, hour) == pytest.approx(SUPPLY_DAY / 24, abs=2e-6)
+    # Each hour's share is in the period that covers it: off-peak has 14 hours of the day.
+    off_peak = _pair(rows, "off_peak")[1]
+    assert off_peak[-1]["sum"] == pytest.approx(2 * SUPPLY_DAY * 14 / 24, abs=1e-4)
+    assert _pair(rows, "peak")[1][-1]["sum"] == pytest.approx(2 * SUPPLY_DAY * 5 / 24, abs=1e-4)
+
+
+async def test_supply_mode_first_hour_puts_the_whole_day_on_hour_zero(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([0.0] * 48)
+    await _write_all(hass, channel, _glohome(), SUPPLY_FIRST_HOUR)
+    rows = await _period_rows(hass)
+    for hour in range(48):
+        expected = SUPPLY_DAY if hour % 24 == 0 else 0.0
+        assert _cost_state(rows, hour) == pytest.approx(expected, abs=2e-6)
+    assert _pair(rows, "off_peak")[1][0]["state"] == pytest.approx(SUPPLY_DAY, abs=2e-6)
+
+
+async def test_supply_mode_none_is_what_period_costs_always_were(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([1.0] * 48)
+    await _write_all(hass, channel, _glohome(), SUPPLY_NONE)
+    rows = await _period_rows(hass)
+    for slug in SLUGS:
+        assert _pair(rows, slug)[1][-1]["sum"] == pytest.approx(PERIOD_COST[slug], abs=1e-4)
+    # Passing no mode at all changes nothing: it is the default.
+    assert await async_insert_period_statistics(hass, NMI, "Home", channel, _glohome()) == 0
+    assert await _period_rows(hass) == rows
+
+
+@pytest.mark.parametrize("mode", [SUPPLY_SPREAD, SUPPLY_FIRST_HOUR])
+async def test_supply_mode_rerun_changes_nothing(
+    recorder_mock: Recorder, hass: HomeAssistant, mode: str
+) -> None:
+    channel = _channel([1.0] * 48)
+    await _write_all(hass, channel, _glohome(), mode)
+    before = await _period_rows(hass)
+    written = await async_insert_period_statistics(
+        hass, NMI, "Home", channel, _glohome(), supply_mode=mode
+    )
+    assert written == 0
+    assert await _period_rows(hass) == before
+
+
+async def test_supply_mode_switching_rewrites_without_double_counting(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A poll under a new mode repairs what it can see; the running totals stay exact."""
+    channel = _channel([1.0] * 48)
+    await _write_all(hass, channel, _glohome(), SUPPLY_NONE)
+    for mode in (SUPPLY_SPREAD, SUPPLY_FIRST_HOUR, SUPPLY_NONE, SUPPLY_SPREAD):
+        await async_insert_period_statistics(
+            hass, NMI, "Home", channel, _glohome(), supply_mode=mode
+        )
+        rows = await _period_rows(hass)
+        total = sum(_pair(rows, slug)[1][-1]["sum"] for slug in SLUGS)
+        carried = 0.0 if mode == SUPPLY_NONE else 2 * SUPPLY_DAY
+        assert total == pytest.approx(sum(PERIOD_COST.values()) + carried, abs=1e-4), mode
+        for slug in SLUGS:
+            kwh, cost = _pair(rows, slug)
+            assert len(cost) == 48  # never extra rows
+            _assert_consistent(cost)
+            assert kwh[-1]["sum"] == pytest.approx(PERIOD_KWH[slug], abs=1e-6)
+
+
+async def test_supply_mode_recalculate_moves_old_history_to_the_new_mode(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([1.0] * 72)  # three days
+    await _write_all(hass, channel, _glohome(), SUPPLY_NONE)
+    written = await async_recalculate_costs(
+        hass,
+        NMI,
+        "Home",
+        "E1",
+        _glohome(),
+        date(2026, 10, 20),
+        period_statistics=True,
+        supply_mode=SUPPLY_SPREAD,
+    )
+    assert written == 72  # the combined cost's hours
+    rows = await _period_rows(hass)
+    combined = await _stored_cost(hass)
+    for hour in range(72):  # a uniform-usage day: each hour is plain usage plus a 24th of supply
+        plain = _day_states()[hour % 24] - (SUPPLY_DAY if hour % 24 == 0 else 0.0)
+        assert _cost_state(rows, hour) == pytest.approx(plain + SUPPLY_DAY / 24, abs=3e-6)
+    assert sum(_pair(rows, slug)[1][-1]["sum"] for slug in SLUGS) == pytest.approx(
+        combined[-1]["sum"], abs=1e-4
+    )
+    for slug in SLUGS:
+        _assert_consistent(_pair(rows, slug)[1])
+    # And back, from a later day only: day one keeps the spread, the rest return to plain.
+    await async_recalculate_costs(
+        hass,
+        NMI,
+        "Home",
+        "E1",
+        _glohome(),
+        date(2026, 10, 21),
+        period_statistics=True,
+        supply_mode=SUPPLY_NONE,
+    )
+    rows = await _period_rows(hass)
+    for hour in range(24):
+        plain = _day_states()[hour] - (SUPPLY_DAY if hour == 0 else 0.0)
+        assert _cost_state(rows, hour) == pytest.approx(plain + SUPPLY_DAY / 24, abs=3e-6)
+    for hour in range(24, 72):
+        plain = _day_states()[hour % 24] - (SUPPLY_DAY if hour % 24 == 0 else 0.0)
+        assert _cost_state(rows, hour) == pytest.approx(plain, abs=3e-6)
+    for slug in SLUGS:
+        _assert_consistent(_pair(rows, slug)[1])
+
+
+async def test_supply_mode_recalculate_without_period_statistics_ignores_the_mode(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([1.0] * 48)
+    await _write_all(hass, channel, _glohome(), SUPPLY_NONE)
+    before = await _period_rows(hass)
+    await async_recalculate_costs(
+        hass, NMI, "Home", "E1", _glohome(), date(2026, 10, 20), supply_mode=SUPPLY_SPREAD
+    )
+    assert await _period_rows(hass) == before
+
+
+async def test_supply_mode_has_no_effect_on_a_flat_rate(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    tariff = flat_tariff(10.0, effective_from=D0, supply_c_per_day=100.0)
+    channel = _channel([1.0] * 48)
+    await _write_all(hass, channel, tariff, SUPPLY_SPREAD)
+    cost = await _rows_of(hass, period_statistic_ids(NMI, "all_day")[1])
+    assert cost[-1]["sum"] == pytest.approx(48 * 0.10, abs=1e-6)  # usage only, no supply
+
+
+async def test_supply_mode_spread_across_daylight_saving_adds_up_on_23_and_25_hour_days(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    tariff = _glohome_in("Australia/Melbourne")
+    for first_day, hours in ((date(2026, 4, 4), 73), (date(2026, 10, 3), 71)):
+        values = [((i * 7) % 11) / 3 + 0.25 for i in range(hours)]
+        channel = _channel(values, _local_midnight(first_day, MELBOURNE))
+        await _write_all(hass, channel, tariff, SUPPLY_SPREAD)
+    rows = await _period_rows(hass)
+    combined = await _stored_cost(hass)
+    assert len(combined) == 73 + 71
+    # Each local day (23 or 25 hours long) adds up to the combined cost for it.
+    starts = [_local_midnight(date(2026, 4, d), MELBOURNE) for d in (4, 5, 6)]
+    starts += [_local_midnight(date(2026, 10, d), MELBOURNE) for d in (3, 4, 5)]
+    starts += [starts[2] + timedelta(hours=24), starts[5] + timedelta(hours=24)]  # day ends
+    stamps = [dt_util.utc_from_timestamp(row["start"]) for row in combined]
+    days = ((0, 1, 24), (1, 2, 25), (3, 4, 24), (4, 5, 23))
+    for a, b, hours in days:
+        wanted = [i for i, m in enumerate(stamps) if starts[a] <= m < starts[b]]
+        assert len(wanted) == hours
+        assert sum(_cost_state(rows, i) for i in wanted) == pytest.approx(
+            sum(combined[i]["state"] for i in wanted), abs=1e-4
+        )
+    assert sum(_pair(rows, slug)[1][-1]["sum"] for slug in SLUGS) == pytest.approx(
+        combined[-1]["sum"], abs=1e-4
+    )
+    for slug in SLUGS:
+        _assert_consistent(_pair(rows, slug)[1])

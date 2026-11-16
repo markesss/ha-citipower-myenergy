@@ -42,9 +42,14 @@ Per-period statistics (opt-in)
 With the "statistics per tariff period" option on, each import period also gets its own
 kWh statistic (``<nmi>_e1_<slug>``) and cost statistic (``<nmi>_e1_<slug>_cost``), so the
 Energy dashboard can draw each period as its own grid source in its own colour. The combined
-``_e1`` and ``_e1_cost`` statistics are untouched and keep including the supply charge; the
-per-period costs exclude it. (The dashboard's fixed daily cost adjustment is not applied with
-per-period sources, so in this mode the supply charge is simply not shown; see the README.)
+``_e1`` and ``_e1_cost`` statistics are untouched and keep including the supply charge. The
+per-period costs leave it out by default, because the dashboard's fixed daily cost adjustment
+is not applied to per-period sources, so it would not be shown. A **supply mode** option can
+instead put it in the period costs (see ``tariff.cost_for_day_by_period``): spread equally over
+every hour of the day, or all on the day's first hour, so the period costs add up to the day's
+combined cost. The mode only changes cost rows; kWh rows never depend on it. Changing it
+disagrees with the stored cost rows from the first day in range, so the usual repair rule
+rewrites them (``async_recalculate_costs`` reaches older history).
 
 * The set of periods is the union of every tariff version's period names, keyed by slug (see
   ``tariff.period_slugs``). A day priced under a version that lacks a period writes zero for
@@ -86,6 +91,7 @@ from .nem12 import Channel
 from .tariff import (
     KIND_EXPORT,
     KIND_IMPORT,
+    SUPPLY_NONE,
     Tariff,
     cost_for_day,
     cost_for_day_by_period,
@@ -543,13 +549,15 @@ async def async_recalculate_costs(
     from_day: date,
     *,
     period_statistics: bool = False,
+    supply_mode: str = SUPPLY_NONE,
 ) -> int:
     """Reprice a channel's history from ``from_day`` on, using the stored kWh statistic.
 
     Used when the tariff changed and older days should follow it. Rewrites every cost row
     from that day with the running total recalculated; nothing is read from the portal.
     With ``period_statistics`` the import channel's per-period statistics are rewritten too
-    (from the current period list). The return value counts the combined cost's hours only.
+    (from the current period list) with ``supply_mode`` deciding where the supply charge goes
+    in their costs. The return value counts the combined cost's hours only.
     """
     start = local_day_hours(from_day, tariff.tzinfo)[0]
     hours = await _async_stored_hours(hass, nmi, suffix, start)
@@ -557,7 +565,9 @@ async def async_recalculate_costs(
         hass, nmi, name, suffix, tariff, hours, reprice_from=from_day
     )
     if period_statistics and suffix.upper() == "E1":
-        await _async_write_periods(hass, nmi, name, tariff, hours, reprice_from=from_day)
+        await _async_write_periods(
+            hass, nmi, name, tariff, hours, reprice_from=from_day, supply_mode=supply_mode
+        )
     return written
 
 
@@ -570,6 +580,7 @@ def _period_series(
     site: str,
     tariff: Tariff,
     days: dict[date, dict[datetime, float]],
+    supply_mode: str = SUPPLY_NONE,
 ) -> list[_Series]:
     """Build every period's kWh and cost series: a row per hour, zero outside the period."""
     slugs = period_slugs(tariff, KIND_IMPORT)
@@ -579,7 +590,8 @@ def _period_series(
         for slug in slugs.values():
             kwh_rows[slug][day] = {}
             cost_rows[slug][day] = {}
-        for moment, item in cost_for_day_by_period(readings, tariff, KIND_IMPORT, day).items():
+        priced = cost_for_day_by_period(readings, tariff, KIND_IMPORT, day, supply_mode)
+        for moment, item in priced.items():
             owner = slugs[item.period]
             for slug in slugs.values():
                 mine = slug == owner
@@ -602,17 +614,23 @@ async def _async_write_periods(
     hours: dict[datetime, float],
     *,
     reprice_from: date | None = None,
+    supply_mode: str = SUPPLY_NONE,
 ) -> int:
     """Price whole days into every period's statistics together; return hours written."""
     days = _complete_days(hours, dt_util.utcnow(), tariff.tzinfo)
     if not days:
         return 0
-    series = _period_series(hass, nmi, name, tariff, days)
+    series = _period_series(hass, nmi, name, tariff, days, supply_mode)
     return await _async_write_series(hass, series, tariff.tzinfo, reprice_from=reprice_from)
 
 
 async def async_insert_period_statistics(
-    hass: HomeAssistant, nmi: str, name: str, channel: Channel, tariff: Tariff
+    hass: HomeAssistant,
+    nmi: str,
+    name: str,
+    channel: Channel,
+    tariff: Tariff,
+    supply_mode: str = SUPPLY_NONE,
 ) -> int:
     """Record the import channel's per-period kWh and cost; return hours written.
 
@@ -634,4 +652,4 @@ async def async_insert_period_statistics(
     if new_statistic:
         stored = await _async_stored_hours(hass, nmi, channel.suffix, dt_util.utc_from_timestamp(0))
         hours = {**stored, **hours}
-    return await _async_write_periods(hass, nmi, name, tariff, hours)
+    return await _async_write_periods(hass, nmi, name, tariff, hours, supply_mode=supply_mode)

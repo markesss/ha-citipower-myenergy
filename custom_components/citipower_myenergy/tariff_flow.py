@@ -41,8 +41,10 @@ from .const import (
     CONF_DESCRIPTION,
     CONF_NMI,
     CONF_PERIOD_STATS,
+    CONF_SUPPLY_MODE,
     CONF_TARIFF,
     MARKET_TZ,
+    SUPPLY_MODES,
 )
 from .exceptions import MyEnergyError, TariffError
 from .session_store import SessionStore
@@ -52,7 +54,9 @@ from .tariff import (
     KIND_EXPORT,
     KIND_IMPORT,
     Tariff,
+    daily_supply_dollars,
     flat_tariff,
+    supply_mode_of,
     zone_for,
 )
 
@@ -95,6 +99,8 @@ class TariffOptionsFlow(OptionsFlow):
         self._export_applicable = False
         self._period_index: int | None = None
         self._pending: Tariff | None = None  # saved once the user answers the clock-change step
+        # Options awaiting the supply-charge answer on the per-period statistics path.
+        self._pending_options: dict[str, Any] | None = None
 
     # --- Helpers ---------------------------------------------------------------------
 
@@ -591,14 +597,28 @@ class TariffOptionsFlow(OptionsFlow):
 
     # --- Recalculate history ---------------------------------------------------------------
 
-    async def _async_reprice(self, tariff: Tariff, from_day: date) -> int:
-        """Reprice every priced channel's stored history from a day; return combined-cost hours."""
+    async def _async_reprice(
+        self,
+        tariff: Tariff,
+        from_day: date,
+        *,
+        period_statistics: bool | None = None,
+        supply_mode: str | None = None,
+    ) -> int:
+        """Reprice every priced channel's stored history from a day; return combined-cost hours.
+
+        The per-period switch and supply mode default to the saved options; the supply-charge
+        step passes the values it is about to save instead, so history follows the new choice.
+        """
         data = self.config_entry.data
         name = data.get(CONF_DESCRIPTION) or data.get(CONF_ADDRESS) or data[CONF_NMI]
         store = SessionStore(self.hass)
         await store.async_load()
         suffixes = store.suffixes(self.config_entry.entry_id) or ["E1"]
-        period_statistics = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
+        if period_statistics is None:
+            period_statistics = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
+        if supply_mode is None:
+            supply_mode = supply_mode_of(self.config_entry.options)
         rows = 0
         for suffix in suffixes:
             rows += await async_recalculate_costs(
@@ -609,6 +629,7 @@ class TariffOptionsFlow(OptionsFlow):
                 tariff,
                 from_day,
                 period_statistics=period_statistics,
+                supply_mode=supply_mode,
             )
         return rows
 
@@ -685,10 +706,18 @@ class TariffOptionsFlow(OptionsFlow):
             # Saving reloads the entry, and the first poll after the reload backfills history.
             options = dict(self.config_entry.options)
             options[CONF_PERIOD_STATS] = bool(user_input["enabled"])
+            if options[CONF_PERIOD_STATS] and form.is_time_of_use(tariff):
+                # Only a time-of-use tariff has a supply charge to place; a flat rate keeps it
+                # out of the one period, as the dashboard applies its own adjustment there.
+                self._pending_options = options
+                return await self.async_step_tariff_supply_mode()
             return self.async_create_entry(title="", data=options)
         nmi = self.config_entry.data[CONF_NMI]
         details = form.period_statistics_text(
-            tariff, lambda slug: period_statistic_ids(nmi, slug), self.hass.config.currency
+            tariff,
+            lambda slug: period_statistic_ids(nmi, slug),
+            self.hass.config.currency,
+            supply_mode_of(self.config_entry.options),
         )
         current = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
         schema = vol.Schema({vol.Required("enabled", default=current): BooleanSelector()})
@@ -696,4 +725,54 @@ class TariffOptionsFlow(OptionsFlow):
             step_id="tariff_period_stats",
             data_schema=schema,
             description_placeholders={"details": details},
+        )
+
+    async def async_step_tariff_supply_mode(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Choose where the daily supply charge appears in the per-period costs.
+
+        Reached from the per-period step with the new options held back, so nothing is saved until
+        this is answered. Changing the choice offers to rewrite the recorded period costs now,
+        before saving; if that fails nothing is saved. Unticking it saves the choice anyway and
+        leaves older days as they were until "Recalculate cost history" is run.
+        """
+        tariff = self._stored_tariff()
+        options = self._pending_options
+        if tariff is None or options is None:
+            return await self.async_step_tariff()
+        previous = supply_mode_of(self.config_entry.options)
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            mode = user_input["supply_mode"]
+            if mode != previous and user_input["reprice_history"]:
+                try:
+                    await self._async_reprice(
+                        tariff, _FAR_PAST, period_statistics=True, supply_mode=mode
+                    )
+                except (TariffError, MyEnergyError) as err:
+                    _LOGGER.warning("Could not recalculate the cost history: %s", err)
+                    errors["base"] = "recalculate_failed"
+            if not errors:
+                self._pending_options = None
+                options[CONF_SUPPLY_MODE] = mode
+                return self.async_create_entry(title="", data=options)
+        schema = vol.Schema(
+            {
+                vol.Required("supply_mode", default=previous): SelectSelector(
+                    SelectSelectorConfig(
+                        options=list(SUPPLY_MODES),
+                        mode=SelectSelectorMode.LIST,
+                        translation_key="supply_mode",
+                    )
+                ),
+                vol.Required("reprice_history", default=True): BooleanSelector(),
+            }
+        )
+        amount = daily_supply_dollars(tariff.versions[-1])
+        return self.async_show_form(
+            step_id="tariff_supply_mode",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"daily_supply": f"{self.hass.config.currency} {amount:.5f}"},
         )

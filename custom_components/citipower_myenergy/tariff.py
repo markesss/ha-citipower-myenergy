@@ -49,6 +49,8 @@ Decisions worth knowing
   hour's period, kWh and usage cost with the supply charge left out (it belongs to no
   period): ``daily_supply_dollars`` gives it once per day. ``cost_for_day`` and the breakdown
   share one pricing pass, so period costs plus supply always equal the day's total.
+  The breakdown can also carry the supply charge itself (``supply_mode``): spread equally over
+  the day's hours, or all on the first hour, so the period costs add up to the day's total.
 """
 
 from __future__ import annotations
@@ -62,7 +64,14 @@ from functools import cache
 from typing import Any, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from .const import MARKET_TZ
+from .const import (
+    CONF_SUPPLY_MODE,
+    MARKET_TZ,
+    SUPPLY_FIRST_HOUR,
+    SUPPLY_MODES,
+    SUPPLY_NONE,
+    SUPPLY_SPREAD,
+)
 from .exceptions import TariffError
 
 SCHEMA_VERSION = 1
@@ -430,7 +439,7 @@ class HourCost:
 
     period: str  # the period's name
     kwh: float
-    cost: float  # dollars after GST and discount, EXCLUDING the daily supply charge
+    cost: float  # dollars after GST and discount; the supply charge only if the mode adds it
 
 
 def _charge_factor(version: TariffVersion, kind: str) -> float:
@@ -450,6 +459,12 @@ def daily_supply_dollars(version: TariffVersion) -> float:
     Energy dashboard's fixed daily cost adjustment needs when costs are split by period.
     """
     return version.supply_c_per_day * _charge_factor(version, KIND_IMPORT) / 100
+
+
+def supply_mode_of(options: Mapping[str, Any]) -> str:
+    """Return the stored supply-charge mode, SUPPLY_NONE if absent or not a known mode."""
+    mode = options.get(CONF_SUPPLY_MODE)
+    return mode if mode in SUPPLY_MODES else SUPPLY_NONE
 
 
 def _price_day(
@@ -509,23 +524,56 @@ def cost_for_day(
 
 
 def cost_for_day_by_period(
-    hours: Mapping[datetime, float], tariff: Tariff, kind: str, day: date
+    hours: Mapping[datetime, float],
+    tariff: Tariff,
+    kind: str,
+    day: date,
+    supply_mode: str = SUPPLY_NONE,
 ) -> dict[datetime, HourCost]:
-    """Return each hour of a local day with the period it fell in, its kWh and usage cost.
+    """Return each hour of a local day with the period it fell in, its kWh and cost.
 
-    Same pricing as ``cost_for_day`` (tiers, GST, discount) but the daily supply charge is NOT
-    in any period's cost: for import it is ``daily_supply_dollars`` once per day, so
-    ``sum(period costs) + daily_supply_dollars == sum(cost_for_day)`` for a whole day. A kind
-    with no periods prices at zero under an empty period name. Tier costs belong to the period
-    the hour fell in, so a period's per-day allowance is spent inside that period only.
+    Same pricing as ``cost_for_day`` (tiers, GST, discount). ``supply_mode`` says where the
+    daily supply charge goes (import only; export has none):
+
+    * ``SUPPLY_NONE`` (default): in no period's cost, so
+      ``sum(period costs) + daily_supply_dollars == sum(cost_for_day)`` for a whole day.
+    * ``SUPPLY_SPREAD``: ``daily_supply_dollars / hours in the day`` added to every hour,
+      whichever period it fell in. The day has 23 or 25 hours when the clocks change, and the
+      divisor follows, so a whole day still sums to ``sum(cost_for_day)``.
+    * ``SUPPLY_FIRST_HOUR``: all of it on the day's first hour, the same hour ``cost_for_day``
+      puts it on, in whatever period covers that hour.
+
+    The last two make the periods' costs add up to the combined cost, at the price of a
+    period's cost no longer being its kWh times its rate. A version with a single period (a flat
+    rate) always behaves as ``SUPPLY_NONE``. A kind with no periods prices at
+    zero under an empty period name (and carries no supply charge). Tier costs belong to the
+    period the hour fell in, so a period's per-day allowance is spent inside that period only.
     """
+    if supply_mode not in SUPPLY_MODES:
+        raise TariffError(f"Unknown supply charge mode {supply_mode!r}")
     ordered = _normalise_hours(hours)
     if not ordered:
         return {}
-    if not tariff.version_for(day).periods(kind):
+    version = tariff.version_for(day)
+    if not version.periods(kind):
         return {moment: HourCost("", kwh, 0.0) for moment, kwh in ordered}
+    if len(version.periods(kind)) < 2:
+        # A flat rate is not split by time of use, so the dashboard still applies its own daily
+        # cost adjustment to it; the modes below exist only to stand in for that adjustment.
+        supply_mode = SUPPLY_NONE
     _, factor, rows = _price_day(hours, tariff, kind, day)
-    return {moment: HourCost(name, kwh, cents * factor / 100) for moment, name, kwh, cents in rows}
+    supply = daily_supply_dollars(version) if kind == KIND_IMPORT else 0.0
+    costs: dict[datetime, HourCost] = {}
+    for position, (moment, name, kwh, cents) in enumerate(rows):
+        dollars = cents * factor / 100
+        if supply_mode == SUPPLY_SPREAD:
+            # The hours given, not a fixed 24: callers price whole days, and dividing by what
+            # was given means the day's supply always adds up exactly.
+            dollars += supply / len(rows)
+        elif supply_mode == SUPPLY_FIRST_HOUR and position == 0:
+            dollars += supply
+        costs[moment] = HourCost(name, kwh, dollars)
+    return costs
 
 
 # --- Period slugs -----------------------------------------------------------------------
@@ -573,6 +621,78 @@ def period_slugs(tariff: Tariff, kind: str = KIND_IMPORT) -> dict[str, str]:
         used.add(slug)
         mapping[name] = slug
     return mapping
+
+
+# --- Live lookups: which period is it, and when does it change -----------------------------
+
+# A weekly pattern repeats within 7 days, so a change that has not shown up in 8 is a future
+# tariff version (or there is none: a flat tariff). Callers look again after the horizon.
+SCAN_HOURS = 8 * 24
+
+
+@dataclass(frozen=True, slots=True)
+class PeriodRate:
+    """The period priced at a moment, with its rate as the retailer prints it."""
+
+    period: Period
+    c_per_kwh: float  # first tier, including GST, before the discount
+    discounted_c_per_kwh: float  # the same after the pay-on-time discount
+    tiered: bool  # true when a per-day allowance means more than one rate applies
+
+
+def period_at(tariff: Tariff, when: datetime, kind: str = KIND_IMPORT) -> Period | None:
+    """Return the period priced at an aware moment: the version in force that local day.
+
+    Weekday and hour are read on the tariff's clock, so daylight saving moves the windows
+    with the wall clock. The repeated hour of a 25-hour day belongs to the same window twice.
+    """
+    if when.tzinfo is None:
+        raise TariffError("A time must be timezone-aware")
+    local = when.astimezone(tariff.tzinfo)
+    return tariff.version_for(local.date()).period_for(local, kind)
+
+
+def rate_at(tariff: Tariff, when: datetime, kind: str = KIND_IMPORT) -> PeriodRate | None:
+    """Return the period and its headline rate at a moment, or None if it has no periods."""
+    period = period_at(tariff, when, kind)
+    if period is None:
+        return None
+    version = tariff.version_for(when.astimezone(tariff.tzinfo).date())
+    # Prices entered ex GST are shown with it, as a bill's rate is; the discount is separate.
+    gst = 1.0 if version.prices_include_gst else GST_FACTOR
+    headline = period.tiers[0].c_per_kwh * gst
+    return PeriodRate(
+        period=period,
+        c_per_kwh=round(headline, 6),
+        discounted_c_per_kwh=round(headline * (1 - version.discount_pct / 100), 6),
+        tiered=len(period.tiers) > 1,
+    )
+
+
+def _period_key(period: Period | None) -> tuple[str, tuple[Tier, ...]] | None:
+    """What makes two moments 'the same period': its name and rates, not the version."""
+    return None if period is None else (period.name, period.tiers)
+
+
+def next_period_change(
+    tariff: Tariff, when: datetime, kind: str = KIND_IMPORT
+) -> tuple[datetime, Period | None] | None:
+    """Return (start in UTC, new period) of the next change after ``when``, or None.
+
+    Walks the hour boundaries after ``when`` (statistics and every allowed zone are whole
+    hours) until the period's name or rates differ, so adjacent hours of one period are one
+    stretch and a new tariff version that only changes the supply charge is not a change.
+    A version that changes the rates of a period of the same name is one. None means nothing
+    changes within ``SCAN_HOURS``.
+    """
+    current = _period_key(period_at(tariff, when, kind))
+    boundary = when.astimezone(UTC).replace(minute=0, second=0, microsecond=0)
+    for step in range(1, SCAN_HOURS + 1):
+        moment = boundary + timedelta(hours=step)
+        candidate = period_at(tariff, moment, kind)
+        if _period_key(candidate) != current:
+            return moment, candidate
+    return None
 
 
 def _normalise_hours(hours: Mapping[datetime, float]) -> list[tuple[datetime, float]]:
@@ -769,6 +889,9 @@ __all__ = [
     "KIND_EXPORT",
     "LEGACY_TIMEZONE",
     "KIND_IMPORT",
+    "SUPPLY_FIRST_HOUR",
+    "SUPPLY_NONE",
+    "SUPPLY_SPREAD",
     "HourCost",
     "Kind",
     "Period",
@@ -785,5 +908,6 @@ __all__ = [
     "local_day_hours",
     "period_slug",
     "period_slugs",
+    "supply_mode_of",
     "zone_for",
 ]

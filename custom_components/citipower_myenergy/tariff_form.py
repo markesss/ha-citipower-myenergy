@@ -24,6 +24,9 @@ from .tariff import (
     KIND_IMPORT,
     LEGACY_TIMEZONE,
     SCHEMA_VERSION,
+    SUPPLY_FIRST_HOUR,
+    SUPPLY_NONE,
+    SUPPLY_SPREAD,
     Period,
     Tariff,
     TariffVersion,
@@ -429,16 +432,38 @@ def draft_problem(versions: Sequence[Mapping[str, Any]]) -> str | None:
 # --- Statistics per tariff period ------------------------------------------------------------
 
 
+def is_time_of_use(tariff: Tariff) -> bool:
+    """Say whether the newest rates split import into more than one period."""
+    return len(tariff.versions[-1].import_periods) > 1
+
+
+def _supply_sentence(mode: str, time_of_use: bool) -> str:
+    """Say where the supply charge is for the saved mode; a flat rate never moves it."""
+    if not time_of_use or mode == SUPPLY_NONE:
+        return (
+            "It is not included in these period costs, and the dashboard does not add it, so "
+            "use the combined cost statistic for your full bill."
+        )
+    if mode == SUPPLY_SPREAD:
+        return "It is included in these period costs, spread equally over every hour of the day."
+    if mode == SUPPLY_FIRST_HOUR:
+        return "It is included in these period costs, all on the first hour of each day."
+    return ""
+
+
 def period_statistics_text(
-    tariff: Tariff, ids_for: Callable[[str], tuple[str, str]], currency: str
+    tariff: Tariff,
+    ids_for: Callable[[str], tuple[str, str]],
+    currency: str,
+    supply_mode: str = SUPPLY_NONE,
 ) -> str:
     """Return the markdown the "statistics per period" step shows: what is written, the supply.
 
     ``ids_for`` turns a period slug into its (kWh, cost) statistic ids. The daily supply amount is
     the newest version's supply charge after GST and the discount, exactly what the combined cost
-    statistic puts on each day, so period costs plus this equal the combined cost. It is shown for
-    reference only: Home Assistant's daily cost adjustment is not applied to per-period sources,
-    so the supply charge does not reach the dashboard in this mode.
+    statistic puts on each day. What the sentence under it says depends on the saved
+    ``supply_mode``: left out, spread over the hours, or on the first hour. Home Assistant's own
+    daily cost adjustment is not applied to per-period sources, so it never adds it.
     """
     version = tariff.versions[-1]
     current = {period.name for period in version.import_periods}
@@ -449,10 +474,10 @@ def period_statistics_text(
     if version.discount_pct:
         how += f" less the {version.discount_pct:g}% discount"
     lines = [
-        f"**Daily supply charge, for reference only: {currency} {amount:.5f}**",
+        f"**Daily supply charge: {currency} {amount:.5f}**",
         "",
         f"That is your {how}, from the rates starting {version.effective_from.isoformat()}. "
-        "It is not included in these period costs, and the dashboard does not add it.",
+        + _supply_sentence(supply_mode, is_time_of_use(tariff)),
         "",
         "Statistics that will be written:",
     ]

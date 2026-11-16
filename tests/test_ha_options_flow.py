@@ -19,6 +19,7 @@ from custom_components.citipower_myenergy.const import (
     CONF_NMI,
     CONF_PERIOD_STATS,
     CONF_SIGNED_IN_AT,
+    CONF_SUPPLY_MODE,
     CONF_TARIFF,
     DOMAIN,
 )
@@ -596,7 +597,7 @@ async def test_period_statistics_step_shows_the_adjustment_and_the_ids(
     assert result["step_id"] == "tariff_period_stats"
     details = result["description_placeholders"]["details"]
     assert f"{hass.config.currency} 0.89628" in details
-    assert "for reference only" in details  # the dashboard does not add it in this mode
+    assert "not included in these period costs" in details  # the default: supply left out
     assert "to enter" not in details
     for slug in ("peak", "off_peak", "shoulder"):
         assert f"citipower_myenergy:{NMI}_e1_{slug}`" in details
@@ -613,8 +614,13 @@ async def test_period_statistics_can_be_turned_on_and_off_keeping_the_other_opti
     result = await open_tariff_menu(hass, entry)
     result = await pick(hass, result, "tariff_period_stats")
     result = await go(hass, result, {"enabled": True})
+    # A time-of-use tariff is asked where the supply charge goes; nothing is saved before that.
+    assert result["step_id"] == "tariff_supply_mode"
+    assert CONF_PERIOD_STATS not in entry.options
+    result = await go(hass, result, {"supply_mode": "none", "reprice_history": True})
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_PERIOD_STATS] is True
+    assert entry.options[CONF_SUPPLY_MODE] == "none"
     assert entry.options[CONF_KEEPALIVE_MINUTES] == 25
     assert entry.options[CONF_TARIFF] == stored(glohome_version())
 
@@ -654,7 +660,7 @@ async def test_recalculate_rewrites_period_statistics_only_when_the_option_is_on
     recalc = AsyncMock(return_value=24)
     with patch("custom_components.citipower_myenergy.tariff_flow.async_recalculate_costs", recalc):
         await go(hass, result, {"from_date": "2026-11-01"})
-    assert recalc.await_args.kwargs == {"period_statistics": enabled}
+    assert recalc.await_args.kwargs == {"period_statistics": enabled, "supply_mode": "none"}
 
 
 # --- The pricing clock ----------------------------------------------------------------------
@@ -769,7 +775,7 @@ async def test_changing_the_clock_asks_and_reprices_all_history_before_saving(
     assert args[3] == "E1"
     assert args[4].zone_name == "Australia/Melbourne"  # priced on the NEW clock
     assert args[5] == date(2000, 1, 1)  # from before any stored reading
-    assert recalc.await_args.kwargs == {"period_statistics": True}
+    assert recalc.await_args.kwargs == {"period_statistics": True, "supply_mode": "none"}
 
 
 async def test_the_user_can_decline_the_repricing_and_still_save(
@@ -869,3 +875,205 @@ async def test_advanced_yaml_can_set_a_zone_and_rejects_one_that_is_not_offered(
     result = await go(hass, result, {"tariff": sydney})
     assert result["type"] is FlowResultType.CREATE_ENTRY  # nothing stored before: no question
     assert entry.options[CONF_TARIFF] == sydney
+
+
+# --- Where the supply charge goes in the period costs -----------------------------------------
+
+RECALC = "custom_components.citipower_myenergy.tariff_flow.async_recalculate_costs"
+
+
+async def open_supply_step(hass: HomeAssistant, entry: MockConfigEntry):
+    """From a time-of-use tariff, turn per-period statistics on and land on the supply step."""
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_period_stats")
+    result = await go(hass, result, {"enabled": True})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "tariff_supply_mode"
+    return result
+
+
+async def test_the_supply_step_is_not_shown_for_a_flat_rate(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    flat = flat_tariff(30.0, effective_from=date(2026, 10, 28), supply_c_per_day=100.0).to_dict()
+    entry = make_entry(hass, {CONF_TARIFF: flat})
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_period_stats")
+    result = await go(hass, result, {"enabled": True})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_PERIOD_STATS] is True
+    assert CONF_SUPPLY_MODE not in entry.options  # a flat rate inherently leaves it out
+
+
+async def test_the_supply_step_is_not_shown_when_turning_the_statistics_off(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(
+        hass,
+        {
+            CONF_TARIFF: stored(glohome_version()),
+            CONF_PERIOD_STATS: True,
+            CONF_SUPPLY_MODE: "spread",
+        },
+    )
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_period_stats")
+    result = await go(hass, result, {"enabled": False})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_PERIOD_STATS] is False
+    assert entry.options[CONF_SUPPLY_MODE] == "spread"  # remembered for when it is turned on
+
+
+async def test_the_supply_step_offers_the_three_choices_defaulting_to_left_out(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass, {CONF_TARIFF: stored(glohome_version())})  # no mode stored
+    result = await open_supply_step(hass, entry)
+    markers = {str(marker): marker for marker in result["data_schema"].schema}
+    assert set(markers) == {"supply_mode", "reprice_history"}
+    assert markers["supply_mode"].default() == "none"
+    assert markers["reprice_history"].default() is True  # ticked by default
+    selector = result["data_schema"].schema[markers["supply_mode"]]
+    assert selector.config["options"] == ["none", "spread", "first_hour"]
+    assert selector.config["translation_key"] == "supply_mode"
+    assert result["description_placeholders"] == {"daily_supply": f"{hass.config.currency} 0.89628"}
+
+
+async def test_the_supply_step_remembers_the_saved_choice(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(
+        hass,
+        {
+            CONF_TARIFF: stored(glohome_version()),
+            CONF_PERIOD_STATS: True,
+            CONF_SUPPLY_MODE: "first_hour",
+        },
+    )
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_period_stats")
+    assert "all on the first hour" in result["description_placeholders"]["details"]
+    result = await go(hass, result, {"enabled": True})
+    markers = {str(marker): marker for marker in result["data_schema"].schema}
+    assert markers["supply_mode"].default() == "first_hour"
+
+
+@pytest.mark.parametrize("mode", ["spread", "first_hour"])
+async def test_changing_the_supply_mode_reprices_the_period_costs_before_saving(
+    recorder_mock: Recorder,
+    hass: HomeAssistant,
+    custom_integration,
+    hass_storage,
+    mode: str,
+) -> None:
+    entry = make_entry(hass, {CONF_KEEPALIVE_MINUTES: 25, CONF_TARIFF: stored(glohome_version())})
+    await SessionStore(hass).async_save_suffixes(entry.entry_id, ["E1"])
+    result = await open_supply_step(hass, entry)
+    recalc = AsyncMock(return_value=10)
+    with patch(RECALC, recalc):
+        result = await go(hass, result, {"supply_mode": mode, "reprice_history": True})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SUPPLY_MODE] == mode
+    assert entry.options[CONF_PERIOD_STATS] is True
+    assert entry.options[CONF_KEEPALIVE_MINUTES] == 25
+    assert entry.options[CONF_TARIFF] == stored(glohome_version())
+    recalc.assert_awaited_once()
+    args = recalc.await_args.args
+    assert args[3] == "E1"
+    assert args[5] == date(2000, 1, 1)  # from before any stored reading
+    # The new choice and the switch it is about to save, not the not-yet-saved old options.
+    assert recalc.await_args.kwargs == {"period_statistics": True, "supply_mode": mode}
+
+
+async def test_keeping_the_same_supply_mode_does_not_reprice(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(
+        hass,
+        {
+            CONF_TARIFF: stored(glohome_version()),
+            CONF_PERIOD_STATS: True,
+            CONF_SUPPLY_MODE: "spread",
+        },
+    )
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_period_stats")
+    result = await go(hass, result, {"enabled": True})
+    recalc = AsyncMock()
+    with patch(RECALC, recalc):
+        result = await go(hass, result, {"supply_mode": "spread", "reprice_history": True})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SUPPLY_MODE] == "spread"
+    recalc.assert_not_awaited()
+
+
+async def test_the_user_can_decline_the_supply_repricing_and_still_save(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(hass, {CONF_TARIFF: stored(glohome_version())})
+    result = await open_supply_step(hass, entry)
+    recalc = AsyncMock()
+    with patch(RECALC, recalc):
+        result = await go(hass, result, {"supply_mode": "spread", "reprice_history": False})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SUPPLY_MODE] == "spread"
+    recalc.assert_not_awaited()
+
+
+async def test_a_failed_supply_repricing_saves_nothing_and_keeps_the_step_open(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    options = {CONF_TARIFF: stored(glohome_version()), CONF_KEEPALIVE_MINUTES: 25}
+    entry = make_entry(hass, dict(options))
+    await SessionStore(hass).async_save_suffixes(entry.entry_id, ["E1"])
+    result = await open_supply_step(hass, entry)
+    recalc = AsyncMock(side_effect=MyEnergyError("boom"))
+    with patch(RECALC, recalc):
+        result = await go(hass, result, {"supply_mode": "spread", "reprice_history": True})
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "tariff_supply_mode"
+    assert result["errors"] == {"base": "recalculate_failed"}
+    assert dict(entry.options) == options  # not even the per-period switch was saved
+    # Declining lets the user save anyway.
+    result = await go(hass, result, {"supply_mode": "spread", "reprice_history": False})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SUPPLY_MODE] == "spread"
+    assert entry.options[CONF_PERIOD_STATS] is True
+
+
+async def test_recalculate_cost_history_follows_the_saved_supply_mode(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(
+        hass,
+        {
+            CONF_TARIFF: stored(glohome_version()),
+            CONF_PERIOD_STATS: True,
+            CONF_SUPPLY_MODE: "first_hour",
+        },
+    )
+    await SessionStore(hass).async_save_suffixes(entry.entry_id, ["E1"])
+    result = await open_tariff_menu(hass, entry)
+    result = await pick(hass, result, "tariff_recalculate")
+    recalc = AsyncMock(return_value=24)
+    with patch(RECALC, recalc):
+        await go(hass, result, {"from_date": "2026-11-01"})
+    assert recalc.await_args.kwargs == {"period_statistics": True, "supply_mode": "first_hour"}
+
+
+async def test_the_keepalive_step_keeps_the_supply_mode(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, hass_storage
+) -> None:
+    entry = make_entry(
+        hass,
+        {
+            CONF_PERIOD_STATS: True,
+            CONF_SUPPLY_MODE: "spread",
+            CONF_TARIFF: stored(glohome_version()),
+        },
+    )
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    result = await pick(hass, result, "keepalive")
+    result = await go(hass, result, {CONF_KEEPALIVE_MINUTES: 30})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options[CONF_SUPPLY_MODE] == "spread"

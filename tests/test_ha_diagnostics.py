@@ -51,6 +51,7 @@ async def test_the_tariff_structure_is_summarised(hass: HomeAssistant) -> None:
         "period_statistics": True,
         "timezone": "Australia/Brisbane",  # no zone stored: fixed AEST
         "timezone_set": False,
+        "supply_mode": "none",
         "versions": [
             {
                 "effective_from": "2026-01-01",
