@@ -1568,3 +1568,61 @@ async def test_chain_the_repairs_flow_aborts_cleanly_without_a_tariff_or_entry(
     flow = await async_create_fix_flow(hass, "chain_break_x", {"entry_id": entry.entry_id})
     flow.hass = hass
     assert (await flow.async_step_init())["reason"] == "no_tariff"
+
+
+# --- Startup: the recorder stores nothing until Home Assistant has started ------------------
+#
+# Seen live on 0.2.0b5: setup of the integration took 299.6 seconds (Home Assistant's 300 second
+# limit) and held up the rest of startup. Writes waited for the recorder to store their rows,
+# but the recorder does not work its queue until Home Assistant has started, and Home Assistant
+# cannot finish starting until setup returns.
+
+
+async def _hang() -> None:
+    import asyncio
+
+    await asyncio.Event().wait()
+
+
+async def test_startup_writes_do_not_wait_for_the_recorder(
+    recorder_mock: Recorder, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    from homeassistant.components.recorder import get_instance
+    from homeassistant.core import CoreState
+
+    from custom_components.citipower_myenergy.chain_guard import guard_for
+
+    hass.set_state(CoreState.starting)
+    # A recorder that has not started never answers a request to settle.
+    monkeypatch.setattr(get_instance(hass), "async_block_till_done", _hang)
+
+    channel = _channel([1.0] * 48)
+    async with asyncio.timeout(10):  # would hang forever, as setup did, without the fix
+        await async_insert_channel(hass, NMI, "Home", channel)
+        await async_insert_cost(hass, NMI, "Home", channel, _glohome())
+        await async_insert_period_statistics(
+            hass, NMI, "Home", channel, _glohome(), supply_mode=SUPPLY_SPREAD
+        )
+
+    guard = guard_for(hass, NMI)
+    assert guard.trail  # the writes happened and were recorded
+    # Nothing was read back, so nothing is claimed as checked and nothing is flagged.
+    assert all(entry.verified is None for entry in guard.trail)
+    assert guard.broken == {}
+
+
+async def test_a_recorder_that_never_settles_cannot_stall_a_write_forever(
+    recorder_mock: Recorder, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import asyncio
+
+    from homeassistant.components.recorder import get_instance
+
+    from custom_components.citipower_myenergy import statistics as stats
+
+    monkeypatch.setattr(stats, "_SETTLE_TIMEOUT", 0.05)
+    monkeypatch.setattr(get_instance(hass), "async_block_till_done", _hang)
+    async with asyncio.timeout(15):
+        await async_insert_channel(hass, NMI, "Home", _channel([1.0] * 48))

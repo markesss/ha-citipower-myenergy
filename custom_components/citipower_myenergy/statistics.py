@@ -83,7 +83,7 @@ from homeassistant.components.recorder.statistics import (
     statistics_during_period,
 )
 from homeassistant.const import UnitOfEnergy
-from homeassistant.core import HomeAssistant
+from homeassistant.core import CoreState, HomeAssistant
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import EnergyConverter
 
@@ -115,6 +115,9 @@ _COST_TOLERANCE = 5e-7
 # How long to wait for rows just queued to be stored: this many looks, this far apart.
 _STORED_WAIT_ATTEMPTS = 200
 _STORED_WAIT_STEP = 0.05
+# The longest a write waits for the recorder's queue, so a busy recorder slows a poll rather
+# than stopping it.
+_SETTLE_TIMEOUT = 20.0
 
 # How far a row's running total may differ from the row before it plus its own state.
 _CHAIN_TOLERANCE = 1e-5
@@ -270,7 +273,12 @@ async def _async_insert_channel(hass: HomeAssistant, nmi: str, name: str, channe
         # The kWh total is rebuilt from the portal, not by a cost recalculation, so a break here
         # is logged and kept in the trail but does not raise the repair notice.
         guard = guard_for(hass, nmi)
-        bad = await _async_chain_problem(hass, statistic_id, statistics[0]["start"])
+        checked = _recorder_running(hass)
+        bad = (
+            await _async_chain_problem(hass, statistic_id, statistics[0]["start"])
+            if checked
+            else None
+        )
         if bad is not None:
             _warn_not_joined(guard, statistic_id, bad, found="After writing")
         guard.record(
@@ -281,7 +289,7 @@ async def _async_insert_channel(hass: HomeAssistant, nmi: str, name: str, channe
             start_total=running_sum - sum(row["state"] for row in statistics),
             rows=len(statistics),
             join_repaired=False,
-            verified=bad is None,
+            verified=(bad is None) if checked else None,
         )
     return len(statistics)
 
@@ -338,6 +346,18 @@ async def _async_total_before(
     return 0.0, None
 
 
+def _recorder_running(hass: HomeAssistant) -> bool:
+    """Return whether Home Assistant has started, which is when the recorder works its queue.
+
+    Until then the recorder thread waits for startup and stores nothing it has been given, so a
+    setup that waited for its rows (or read them back to check them) would wait until Home
+    Assistant's own 300 second setup limit, and Home Assistant cannot finish starting until
+    setup returns. Before startup nothing else is writing these statistics, so nothing is
+    waited for and the rows are not checked; the next poll after startup does both.
+    """
+    return hass.state is CoreState.running
+
+
 async def _async_settled(hass: HomeAssistant) -> None:
     """Wait until every statistics write queued so far has been stored.
 
@@ -346,9 +366,17 @@ async def _async_settled(hass: HomeAssistant) -> None:
 
     ``async_block_till_done`` returns at once when the queue is empty, which is also the case
     while the recorder is part-way through the task it just took off the queue, so rows we
-    have just written are confirmed with ``_async_wait_until_stored`` instead.
+    have just written are confirmed with ``_async_wait_until_stored`` instead. Does nothing
+    before Home Assistant has started (see ``_recorder_running``), and gives up after
+    ``_SETTLE_TIMEOUT`` rather than holding up whatever called it.
     """
-    await get_instance(hass).async_block_till_done()
+    if not _recorder_running(hass):
+        return
+    try:
+        async with asyncio.timeout(_SETTLE_TIMEOUT):
+            await get_instance(hass).async_block_till_done()
+    except TimeoutError:
+        _LOGGER.debug("The recorder did not settle in %s seconds; carrying on", _SETTLE_TIMEOUT)
 
 
 async def _async_wait_until_stored(
@@ -357,7 +385,10 @@ async def _async_wait_until_stored(
     """Wait until the last row just queued can be read back; return whether it could.
 
     The rows of one write are stored together, so the last one being readable means all are.
+    Returns False at once before Home Assistant has started: the recorder is not storing yet.
     """
+    if not _recorder_running(hass):
+        return False
     await _async_settled(hass)
     last = statistics[-1]
     for _ in range(_STORED_WAIT_ATTEMPTS):
@@ -602,11 +633,12 @@ async def _async_write_series(
             )
             async_add_external_statistics(hass, item.metadata, statistics)
             await _async_wait_until_stored(hass, statistic_id, statistics)
-            bad = await _async_chain_problem(hass, statistic_id, statistics[0]["start"])
-            verified = bad is None
-            if bad is not None:
-                _warn_not_joined(guard, statistic_id, bad, found="After writing")
-            guard.report(statistic_id, bad)
+            if _recorder_running(hass):
+                bad = await _async_chain_problem(hass, statistic_id, statistics[0]["start"])
+                verified = bad is None
+                if bad is not None:
+                    _warn_not_joined(guard, statistic_id, bad, found="After writing")
+                guard.report(statistic_id, bad)
         elif statistic_id not in broken_join:
             guard.report(statistic_id, None)  # a clean check clears an earlier failure
         guard.record(
