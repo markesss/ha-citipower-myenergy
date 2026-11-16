@@ -1,6 +1,9 @@
 {
   "domain": "citipower_myenergy",
   "name": "CitiPower & Powercor myEnergy",
+  "categories": [
+    "energy.meters_monitoring"
+  ],
   "codeowners": [],
   "config_flow": true,
   "dependencies": [
