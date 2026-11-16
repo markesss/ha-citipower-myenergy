@@ -13,6 +13,7 @@
   "integration_type": "service",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/markesss/ha-citipower-myenergy/issues",
+  "quality_scale": "bronze",
   "requirements": [],
   "version": "0.2.0b8"
 }
