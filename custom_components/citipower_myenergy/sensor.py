@@ -16,14 +16,13 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, SensorStateClass
 from homeassistant.const import EntityCategory, UnitOfEnergy
 from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
-from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.event import async_track_point_in_utc_time
-from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from homeassistant.util import dt as dt_util
 
-from .const import CONF_ADDRESS, CONF_COMPANY, DOMAIN, MARKET_TZ
+from .const import MARKET_TZ
 from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
+from .entity import MyEnergyEntity, device_info
 from .statistics import channel_label
 from .tariff import (
     KIND_IMPORT,
@@ -70,34 +69,6 @@ async def async_setup_entry(
     async_add_entities(entities)
     _add_channels()
     entry.async_on_unload(coordinator.async_add_listener(_add_channels))
-
-
-def _device_info(coordinator: MyEnergyCoordinator) -> DeviceInfo:
-    """Describe the NMI's device; every entity of the entry attaches to it."""
-    return DeviceInfo(
-        identifiers={(DOMAIN, coordinator.nmi)},
-        name=f"myEnergy {coordinator.site_name}",
-        manufacturer=coordinator.config_entry.data.get(CONF_COMPANY) or "CitiPower / Powercor",
-        model="Smart meter",
-        serial_number=coordinator.nmi,
-        suggested_area=None,
-        entry_type=DeviceEntryType.SERVICE,
-        configuration_url="https://myenergy.powercor.com.au/s/energy-usage",
-    )
-
-
-class MyEnergyEntity(CoordinatorEntity[MyEnergyCoordinator]):
-    """Common device information."""
-
-    _attr_has_entity_name = True
-
-    def __init__(self, coordinator: MyEnergyCoordinator, key: str) -> None:
-        """Attach to the NMI's device."""
-        super().__init__(coordinator)
-        entry = coordinator.config_entry
-        self._attr_unique_id = f"{coordinator.nmi}_{key}"
-        self._attr_device_info = _device_info(coordinator)
-        self._address = entry.data.get(CONF_ADDRESS)
 
 
 class LatestDataSensor(MyEnergyEntity, SensorEntity):
@@ -295,7 +266,7 @@ class TariffEntity(SensorEntity):
         """Attach to the NMI's device."""
         self._timeline = timeline
         self._attr_unique_id = f"{coordinator.nmi}_{key}"
-        self._attr_device_info = _device_info(coordinator)
+        self._attr_device_info = device_info(coordinator)
 
     async def async_added_to_hass(self) -> None:
         """Rewrite the state at each period boundary."""

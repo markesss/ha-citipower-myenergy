@@ -230,3 +230,23 @@ async def test_unloading_removes_the_button(
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
     assert hass.states.get(entity_id).state == STATE_UNAVAILABLE
+
+
+async def test_entity_and_unique_ids_are_stable(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, poll
+) -> None:
+    """Guards the shared entity base: ids users have in dashboards and automations never move."""
+    entry = await _setup(hass)
+    registry = er.async_get(hass)
+    found = {
+        e.unique_id: (e.entity_id, e.has_entity_name, e.translation_key)
+        for e in er.async_entries_for_config_entry(registry, entry.entry_id)
+    }
+    assert found == {
+        f"{NMI}_latest_data": ("sensor.myenergy_6001234567_latest_data", True, "latest_data"),
+        f"{NMI}_session": ("sensor.myenergy_6001234567_session", True, "session"),
+        f"{NMI}_refresh_data": ("button.myenergy_6001234567_refresh_data", True, "refresh_data"),
+    }
+    device = dr.async_get(hass).async_get_device(identifiers={(DOMAIN, NMI)})
+    assert device is not None
+    assert {e.device_id for e in registry.entities.values()} == {device.id}

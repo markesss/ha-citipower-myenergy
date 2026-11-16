@@ -18,7 +18,7 @@ from homeassistant.exceptions import ConfigEntryAuthFailed, HomeAssistantError
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
-from .sensor import MyEnergyEntity
+from .entity import MyEnergyEntity
 
 _QUERY = re.compile(r"\?\S*")
 
