@@ -6,6 +6,7 @@ status, a reason for every exemption), not whether a status is true; that is the
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -92,4 +93,22 @@ def test_bronze_is_met(rules: dict) -> None:
 def test_silver_is_not_claimed_while_rules_are_open(rules: dict) -> None:
     """A tier needs every rule below it too. Update this when Silver is genuinely met."""
     open_rules = [slug for slug in SILVER if _status(rules[slug]) == "todo"]
-    assert open_rules == ["integration-owner", "parallel-updates", "test-coverage"]
+    assert open_rules == ["test-coverage"]
+
+
+def test_the_manifest_tier_is_one_the_audit_supports(rules: dict) -> None:
+    """The manifest may claim a tier only when every rule of it and below is done or exempt."""
+    manifest = json.loads((FILE.parent / "manifest.json").read_text(encoding="utf-8"))
+    claimed = manifest.get("quality_scale")
+    assert claimed in TIERS
+    for tier, slugs in TIERS.items():
+        for slug in slugs:
+            assert _status(rules[slug]) != "todo", f"{slug} is todo but the manifest says {claimed}"
+        if tier == claimed:
+            break
+
+
+def test_silver_and_above_need_an_owner(rules: dict) -> None:
+    manifest = json.loads((FILE.parent / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["codeowners"], "integration-owner is marked done"
+    assert _status(rules["integration-owner"]) == "done"

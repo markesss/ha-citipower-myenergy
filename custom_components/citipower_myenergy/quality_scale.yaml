@@ -2,28 +2,27 @@
 # https://contributors.home-assistant.io/core/quality-scale/
 #
 # This is a CUSTOM integration. The scale's pages are written for core integrations and never
-# mention custom ones, so this file is a self-audit: nothing here is enforced by Home Assistant
-# for `custom_components`, and it is not confirmed that hassfest reads it for a custom integration.
+# mention custom ones, so this file is a self-audit: Home Assistant does not enforce it for
+# `custom_components`. hassfest does read it once the manifest has a quality_scale key: it
+# accepted "bronze" and this file in a Gitea run on 16 Nov 2026.
 # Statuses: done (followed), todo (not yet), exempt (does not apply; a comment says why).
 # A tier is earned only when every rule of that tier and of the tiers below is done or exempt.
 #
-# Graded 16 Nov 2026 at 0.2.0b8. Where every Bronze rule is done or exempt, Bronze is met on
-# this self-audit. Silver is blocked by integration-owner, parallel-updates and test-coverage;
-# Gold by docs-supported-devices, entity-translations, exception-translations and
-# icon-translations; Platinum by strict-typing. tests/test_quality_scale.py keeps this file's
-# structure honest (every rule present once, valid statuses, a reason for every exemption).
+# Graded 16 Nov 2026. Every Bronze rule is done or exempt, so Bronze is met on this self-audit.
+# Silver is blocked only by test-coverage (every module over 95%); Gold also by
+# docs-supported-devices, entity-translations, exception-translations and icon-translations;
+# Platinum by strict-typing. tests/test_quality_scale.py keeps this file's structure honest
+# (every rule present once, valid statuses, a reason for every exemption).
 #
-# Changes needed in manifest.json to publish a tier (NOT made yet; see the note on enforcement):
-#   1. Add the key  "quality_scale": "bronze"  (later "silver", "gold", "platinum"). The accepted
-#      values are bronze, silver, gold, platinum, internal, legacy, custom and no_score.
-#   2. Keep hassfest's key order: domain, name, then the rest alphabetically, so the new key
-#      goes after "iot_class"/"issue_tracker" and before "requirements"/"version".
-#   3. Silver and above need at least one integration owner: fill in "codeowners" (it is [] now),
-#      for example ["@markesss"]. This is the integration-owner rule.
-#   4. Once the key is set, hassfest (the CI job) validates this file: every rule slug must be
-#      present and spelled exactly, a status must be one of the three, and every exempt rule
-#      needs a comment. Run it before tagging, because it may fail on a custom integration in
-#      ways the core docs do not describe.
+# Manifest state and what moving up a tier needs:
+#   - manifest.json has "quality_scale": "bronze" (after "issue_tracker", before "requirements":
+#     hassfest wants domain, name, then the rest alphabetically). Accepted values are bronze,
+#     silver, gold, platinum, internal, legacy, custom and no_score.
+#   - "codeowners" lists an owner, which Silver and above require (integration-owner).
+#   - To claim Silver: change the key to "silver" in the same change that gets test-coverage to
+#     done, and run hassfest (Gitea or GitHub) before tagging.
+#   - hassfest validates this file once the key is set: every rule slug must be present and
+#     spelled exactly, a status must be one of the three, and every exempt rule needs a comment.
 
 rules:
   # --- Bronze --------------------------------------------------------------------------
@@ -105,14 +104,14 @@ rules:
     status: done
     comment: Coordinator entities become unavailable when the data is unavailable. The session sensor and the Refresh data button stay available on purpose, so an ended session can be seen and retried.
   integration-owner:
-    status: todo
-    comment: codeowners in manifest.json is empty. Add the owner (for example ["@markesss"]).
+    status: done
+    comment: manifest.json lists an owner in codeowners.
   log-when-unavailable:
     status: done
     comment: The coordinator logs a failed update once and its recovery once. The keep-alive logs the end of a session once as a warning and then stops.
   parallel-updates:
-    status: todo
-    comment: PARALLEL_UPDATES is not set in sensor.py or button.py. Set 0 for the coordinator-driven sensors and 1 for the button.
+    status: done
+    comment: sensor.py sets PARALLEL_UPDATES to 0 (every sensor reads data already held) and button.py sets it to 1 (a press polls the portal).
   reauthentication-flow:
     status: done
     comment: async_step_reauth and reauth_confirm, tested, including a different account being refused.

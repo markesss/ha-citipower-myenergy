@@ -186,7 +186,7 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
 - [~] Create the GitHub repo; replace `OWNER` in `manifest.json`
       (`documentation`, `issue_tracker`) and add `codeowners`.
       Repo `markesss/ha-citipower-myenergy` created (a push mirror of the Gitea repo),
-      `OWNER` replaced. `codeowners` is still empty.
+      `OWNER` replaced. `codeowners` is `["@markesss"]` (set 16 Nov 2026).
 - [x] CI green (hassfest, HACS, ruff, pytest).
 - [ ] Update README with live-test results and anything learnt in Phases 3–5.
 - [x] Bump `version` in `manifest.json`; tag a `v0.1.0` release.
@@ -758,20 +758,21 @@ What this tells the design:
 
 Graded against the Home Assistant Integration Quality Scale (54 rules). This is a **custom**
 integration, and the scale's pages are written for core ones and never mention custom
-integrations, so it is a self-audit: it is not confirmed that hassfest or a manifest
-`quality_scale` key does anything for `custom_components`, and none is set. The result is
-kept in `custom_components/citipower_myenergy/quality_scale.yaml` (all 54 rules, status and a
+integrations, so it is a self-audit: Home Assistant does not enforce it for
+`custom_components`, but hassfest does read it once the manifest has a `quality_scale` key. The
+manifest says `"bronze"`, and hassfest accepted the key and the file in a Gitea run on 16 Nov
+2026 (hassfest and ruff + pytest passed; HACS is skipped on Gitea). The result is kept in `custom_components/citipower_myenergy/quality_scale.yaml` (all 54 rules, status and a
 reason each), and `tests/test_quality_scale.py` checks its structure (every rule once, valid
 statuses, a reason for every exemption, Bronze with no todo).
-- [ ] **Manifest changes needed to publish a tier (not made):** (1) add `"quality_scale":
-      "bronze"` (later `silver`, `gold`, `platinum`; accepted values are bronze, silver, gold,
-      platinum, internal, legacy, custom, no_score); (2) keep hassfest's key order, domain and
-      name first then alphabetical, so the key goes after `iot_class`/`issue_tracker` and before
-      `requirements`/`version`; (3) Silver and above need an integration owner, so fill in
-      `codeowners` (currently `[]`); (4) once the key is set, hassfest should validate
-      `quality_scale.yaml` (every slug present and spelled exactly, a valid status, a comment on
-      every exempt rule). Run hassfest in CI before tagging: it is not confirmed that it accepts
-      the key and file for a custom integration.
+- [x] **Manifest tier:** `"quality_scale": "bronze"` is set (hassfest key order: domain and name
+      first, then alphabetical, so it sits after `issue_tracker` and before `requirements`;
+      accepted values are bronze, silver, gold, platinum, internal, legacy, custom, no_score), and
+      `codeowners` is filled in, which Silver and above require. hassfest validates
+      `quality_scale.yaml` once the key is set (every slug present and spelled exactly, a valid
+      status, a comment on every exempt rule). To claim Silver, change the key to `"silver"` in
+      the same change that gets `test-coverage` to done, and run hassfest first.
+      `tests/test_quality_scale.py` fails if the manifest claims a tier the audit does not
+      support.
 
 - [x] **Audit of 0.2.0b7:** 29 done, 12 exempt, 13 todo. No tier earned yet (a tier needs every
       rule of it and the tiers below done or exempt).
@@ -785,9 +786,12 @@ statuses, a reason for every exemption, Bronze with no todo).
       serves it exactly as it serves ha-yvw's, and it showed once the browser cache was cleared.
       Not confirmed: that this satisfies the rule for a custom integration. No SVG source is in
       the repo (the images came from a script).
-- [ ] **Silver:** `integration-owner` (`codeowners` is empty), `parallel-updates` (no
-      `PARALLEL_UPDATES` in `sensor.py` or `button.py`: 0 for the read-only sensors, 1 for the
-      button), `test-coverage` (every module over 95%). At the audit, under 95%: `api.py` 56%,
+- [x] **Silver, done 16 Nov 2026:** `integration-owner` (`codeowners` is `["@markesss"]`) and
+      `parallel-updates` (`PARALLEL_UPDATES = 0` in `sensor.py` because the sensors only read held
+      data, `1` in `button.py` because a press polls the portal; a test pins both).
+- [ ] **Silver, still open:** `test-coverage` (every module over 95%). Re-measure first: this
+      list is from the audit, before the config-flow tests and the repairs change. At the audit,
+      under 95%: `api.py` 56%,
       `aura.py` 57%, `auth.py` 81%, `exceptions.py` 82%, `models.py` 87%, `repairs.py` 88%,
       `portal.py` 89%, `nem12.py` 92% (and `config_flow.py`, since fixed). Total 92%. `api.py` and
       `aura.py` are HTTP code with no HTTP-level tests, which is the large piece.
