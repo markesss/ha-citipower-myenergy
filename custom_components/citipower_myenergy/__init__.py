@@ -7,6 +7,7 @@ from homeassistant.core import HomeAssistant
 
 from .api import MyEnergyApi
 from .aura import MyEnergyAuraClient
+from .chain_guard import guard_for
 from .const import (
     CONF_ADDRESS,
     CONF_COOKIES,
@@ -73,7 +74,8 @@ async def _async_reload_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> None:
-    """Forget the kept session when an entry is removed."""
+    """Forget the kept session, and any repair notice, when an entry is removed."""
+    guard_for(hass, entry.data[CONF_NMI]).reset()
     store = SessionStore(hass)
     await store.async_load()
     await store.async_forget(entry.entry_id)

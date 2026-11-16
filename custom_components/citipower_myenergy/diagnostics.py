@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.components.diagnostics import async_redact_data
 from homeassistant.core import HomeAssistant
 
+from .chain_guard import guard_for
 from .const import (
     CONF_ADDRESS,
     CONF_COOKIES,
@@ -66,6 +67,9 @@ async def async_get_config_entry_diagnostics(
         "entry": async_redact_data(dict(entry.data), TO_REDACT),
         "options": dict(entry.options),
         "cost_tracking": _cost_tracking(entry),
+        # The last writes and any statistic whose running total does not join. Statistics are
+        # named without the NMI, so nothing here identifies the account.
+        "statistics_writes": guard_for(hass, entry.data[CONF_NMI]).as_diagnostics(),
         "session": {
             "dead": coordinator.session_dead,
             "signed_in_at": str(coordinator.signed_in_at),

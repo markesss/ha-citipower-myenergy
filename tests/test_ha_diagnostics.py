@@ -87,3 +87,30 @@ async def test_the_summary_leaks_neither_the_nmi_nor_the_session(hass: HomeAssis
     summary = json.dumps((await async_get_config_entry_diagnostics(hass, entry))["cost_tracking"])
     assert NMI not in summary
     assert "secret-session" not in summary
+
+
+async def test_the_write_trail_is_shown_and_never_names_the_nmi(hass: HomeAssistant) -> None:
+    from custom_components.citipower_myenergy.chain_guard import guard_for
+    from custom_components.citipower_myenergy.statistics import statistic_id_for
+
+    guard = guard_for(hass, NMI)
+    guard.record(
+        who="poll",
+        statistic_id=statistic_id_for(NMI, "E1") + "_peak_cost",  # the id carries the NMI
+        repair_from="2026-11-09",
+        supply_mode="spread",
+        start_total=499.766,
+        rows=48,
+        join_repaired=True,
+        verified=True,
+    )
+    guard.broken["e1_peak_cost"] = "09 Nov 2026 00:00"
+    tariff = flat_tariff(25.0, effective_from=date(2026, 1, 1))
+    result = await async_get_config_entry_diagnostics(hass, _entry({CONF_TARIFF: tariff.to_dict()}))
+
+    writes = result["statistics_writes"]
+    assert writes["recent_writes"][-1]["statistic"] == "e1_peak_cost"
+    assert writes["recent_writes"][-1]["who"] == "poll"
+    assert writes["recent_writes"][-1]["join_repaired"] is True
+    assert writes["not_joined"] == {"e1_peak_cost": "09 Nov 2026 00:00"}
+    assert NMI not in json.dumps(result, default=str)  # nowhere in the whole download
