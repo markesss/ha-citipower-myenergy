@@ -689,6 +689,13 @@ What this tells the design:
 - [ ] Not covered: a break in older history that no write touches (writes start only at a
       poll window or a chosen repair day, which are checked, so this should not arise).
 
+- [x] **Refresh data button** (`button.py`, `tests/test_ha_button.py`): polls the portal on demand
+      with `coordinator.async_refresh()`. Wanted for testing and as a recovery path after a failed
+      refresh, so it is always available (also with the session dead). A failed poll raises
+      `HomeAssistantError`: an ended session says to sign in again (the coordinator has already
+      started reauth), other failures say why with any URL query stripped. A press while its own
+      poll runs is ignored. Not verified live: the button on the user's HA.
+
 ## Backlog / ideas
 
 - [ ] United Energy support: same portal, different username suffix (brand `UE`).

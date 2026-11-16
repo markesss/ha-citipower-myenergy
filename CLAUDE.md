@@ -56,6 +56,7 @@ custom_components/citipower_myenergy/
   config_flow.py    user → method (email/SMS) → code → nmi; reauth; options
   sensor.py         latest data, latest-day kWh per channel, session status; with a tariff,
                     live period / rate / next-change sensors on one boundary timer (TariffTimeline)
+  button.py         Refresh data button: an immediate poll, always available, raises on failure
   diagnostics.py    redacted diagnostics
   tariff.py         PURE: tariff model + per-day pricing on a selectable clock, per-period breakdown with supply-charge modes, slugs
   tariff_form.py    PURE: helpers for the tariff options flow (form <-> dict, review text)

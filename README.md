@@ -223,6 +223,7 @@ the next import fills in every hour missed.
 | Latest data | When the newest reading ends |
 | Latest day grid import / export | Total for the latest complete day |
 | Session (diagnostic) | `active` or `expired`, with the portal's reported time remaining |
+| Refresh data (button) | Polls the portal now, the same poll that runs on the schedule. The portal publishes each day's readings the next morning (about 1am), so pressing it earlier usually finds nothing new. It is for testing, and the way to retry after a failed refresh (no network, the portal down). If the session has ended it starts the sign-in prompt and says so. It stays available in every one of those cases |
 | Current tariff period / rate, Next tariff period starts | Only when a tariff is set up. See [Sensors for automations](#sensors-for-automations) |
 
 ## Troubleshooting

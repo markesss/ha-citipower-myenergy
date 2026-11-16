@@ -9,6 +9,7 @@ flowchart TB
         cf["config_flow.py"]
         co["coordinator.py"]
         se["sensor.py"]
+        bu["button.py"]
         ini["__init__.py"]
         st["statistics.py"]
         di["diagnostics.py"]
@@ -203,6 +204,20 @@ recomputes, reschedules and rewrites the entities. When nothing changes within t
 tariff, or the next version is further away) it looks again after `SCAN_HOURS - 24` hours so a
 later version is still seen about a day before it starts. Saving the tariff reloads the entry
 (the options listener), which rebuilds the timeline; unloading cancels the timer.
+
+### Refresh data button
+
+`button.py` has one button, **Refresh data**, that runs `coordinator.async_refresh()` now: the same
+poll as the scheduled one (readings, cost, per-period statistics), so it takes the same NMI write
+lock from `chain_guard.py` and writes nothing of its own. It exists for testing and as the retry
+after a failed refresh, so it is **always available** while the entry is loaded (it overrides
+`available`, which `CoordinatorEntity` would tie to the last poll succeeding). `async_refresh` keeps
+a failure on the coordinator instead of raising, so after it the button raises `HomeAssistantError`
+when `last_update_success` is false: an auth failure (the coordinator has already started the
+reauth flow) says the session has ended and to sign in again, anything else says the poll failed
+and why, with any URL query removed. A press while its own poll is still running is ignored (an
+`asyncio.Lock` on the entity), so presses cannot start overlapping polls. A successful press
+clears the session-dead state exactly as a scheduled poll does (`_touched`).
 
 ## Session persistence
 
