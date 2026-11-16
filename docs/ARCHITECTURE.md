@@ -15,6 +15,7 @@ flowchart TB
         ss["session_store.py"]
         tls["tls.py"]
         tf["tariff_flow.py"]
+        cg["chain_guard.py<br/>lock, trail, repair notice"]
     end
     subgraph io["aiohttp"]
         direction LR
@@ -109,6 +110,29 @@ flowchart TD
   with the running sum recomputed from the hour before. This fixes estimates
   that are later replaced by actual readings.
 - Hours that haven't finished yet are never written.
+- **One writer at a time.** The poll and the options-flow recalculation both rewrite cost and
+  per-period statistics, each chaining its first row from the stored total before it.
+  `chain_guard.py` holds one `ChainGuard` per NMI (in `hass.data`, found with `guard_for`):
+  every public write in `statistics.py` (`async_insert_channel`, `async_insert_cost`,
+  `async_insert_period_statistics`, `async_recalculate_costs`) takes its lock for the whole
+  run. It waits for the recorder (`async_block_till_done`) before reading, and after writing
+  until the last row written can be read back (`_async_wait_until_stored`; the recorder's own
+  `async_block_till_done` returns at once while it is part-way through the task it just took,
+  which made the check after a write flaky in tests), so a starting total never predates
+  queued rows. `reprice.py` is the recalculation shared by
+  the options flow and the repair; the pure statistics functions need no setup in tests.
+- **Join check.** A row *joins* when its running total is the previous row's total plus its
+  own state. `_async_write_series` treats the first stored row of its window not joining the
+  row just before the window (or two stored rows not joining) as a disagreement from that
+  row's day and rewrites from there, so a bad join is healed even when every state is right.
+- **Detector and trail.** After writing a statistic the rows are checked again from the first
+  written row. A failure logs a warning (short label such as `e1_off_peak_cost` and the local
+  hour, never the NMI) and raises one Repairs notice per entry (`repairs.py`: its fix reprices
+  from far past, as the options flow's recalculation). A later passing check clears it. The
+  guard also keeps the last 20 writes (who, statistic, repair-from day, supply mode, starting
+  total, rows, whether a join was repaired, whether the check passed) for the diagnostics
+  download. Only cost and per-period statistics raise the notice; a break in the combined kWh
+  statistic is logged and kept in the trail. Everything stays local.
 
 ## Cost tracking
 

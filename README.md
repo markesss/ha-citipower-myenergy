@@ -192,6 +192,17 @@ template:
              .total_seconds() / 60) | round(0) }}
 ```
 
+## If a cost looks wrong
+
+Recorded costs are rebuilt from your stored readings, so they can always be regenerated. If a
+running total ever stops joining up (a large negative or positive cost in one hour in the Energy
+dashboard), the integration checks for it after every write and mostly repairs it on the next
+poll. If it cannot, **Settings → Repairs** shows *Cost statistics need repairing*; its fix
+reprices all recorded costs from your stored readings, the same as *Recalculate cost history*.
+The log then has a warning naming the statistic (for example `e1_off_peak_cost`) and the hour,
+and the diagnostics download lists the last 20 statistics writes. None of this names your NMI,
+and nothing leaves Home Assistant.
+
 ## Sessions and re-signing in
 
 myEnergy requires a verification code at every sign-in, so the integration

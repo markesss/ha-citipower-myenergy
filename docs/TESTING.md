@@ -14,7 +14,7 @@ pytest -q
 | `tests/test_tariff*.py` | no | tariff pricing and per-period breakdown, the pricing clock (time zones, 23 and 25 hour days), the supply-charge modes (`test_tariff_supply_modes.py`), options-flow form helpers and strings |
 | `tests/test_ha_options_flow.py` | yes | the tariff options flow, including the clock change and repricing prompt |
 | `tests/test_ha_config_flow.py` | yes | full flow, bad password, bad code + retry, resend, NMI choice, reauth |
-| `tests/test_ha_statistics.py` | yes | first import, append-only, repair on change, separate export stat |
+| `tests/test_ha_statistics.py` | yes | first import, append-only, repair on change, separate export stat; running totals that do not join (`test_chain_*`: seeded breaks are healed or raise the repair notice, one writer at a time, the write trail, the Repairs flow) |
 | `tests/test_ha_tls.py` | yes | SSL context trusts the shipped intermediate and still verifies; sessions share a connector, not cookies |
 
 The pricing-clock tests need a time zone database. Linux and macOS have one; Windows does not,

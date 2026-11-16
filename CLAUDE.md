@@ -60,6 +60,9 @@ custom_components/citipower_myenergy/
   tariff.py         PURE: tariff model + per-day pricing on a selectable clock, per-period breakdown with supply-charge modes, slugs
   tariff_form.py    PURE: helpers for the tariff options flow (form <-> dict, review text)
   tariff_flow.py    HA: the tariff steps of the options flow (menu-driven)
+  chain_guard.py    HA: per-NMI write lock, last-20-writes trail, broken-chain repair notice
+  reprice.py        HA: reprice an entry's history (options flow and the Repairs fix share it)
+  repairs.py        HA: the Repairs fix flow for a cost statistic that does not join
   (cost statistics and the opt-in per-period statistics live in statistics.py)
 tests/
   fixtures/         anonymised real portal responses (see docs/TESTING.md)
@@ -89,6 +92,12 @@ tests/
   hours. Never use it to read meter data, and never assume a tariff day has 24 hours.
 - **The statistics running sum must never double-count.** Any change to
   `statistics.py` needs a test in `test_ha_statistics.py`.
+- **Statistics writes take the NMI's lock and wait for the recorder.** Every public write
+  in `statistics.py` runs under `chain_guard.guard_for(hass, nmi).lock`; never call
+  `async_add_external_statistics` for these statistics from elsewhere, and never read a
+  starting total without `_async_settled`. `_async_write_series` checks that the stored
+  window joins the row before it (running total = previous total + own state); keep that.
+  Logs and the write trail name a statistic by its short label, never the NMI.
 - **All portal traffic goes through `tls.async_create_session`.** The portal omits its
   TLS intermediate certificate, so HA's own client session fails verification. Never
   disable verification to work around it.

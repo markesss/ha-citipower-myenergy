@@ -669,6 +669,26 @@ What this tells the design:
 - [ ] GST on export: moot for this account. The default in `tariff.py` (import only; export
       paid as entered) stays; revisit only if an exporting user appears.
 
+### 0.2.0b5: running totals that do not join (found live, 9 Nov 2026)
+
+- [x] **Found:** the Off Peak cost statistic's running total dropped by $265.83 at 00:00 on
+      9 Nov (the start of the poll's re-check window), with Peak, Solar Soak, the combined cost
+      and every kWh statistic intact. The gap equalled 509 days of Off Peak supply share. Most
+      likely the options-flow recalculation and the first poll after the reload wrote at once,
+      the poll taking its starting total from before the recalculation's last statistic had
+      landed. The poll never looked at the join at its window's start. Repaired by *Recalculate
+      cost history*. The log held nothing from the integration, so the order is an inference.
+- [x] **Fix:** per-NMI write lock (`chain_guard.py`), recorder wait before reads, read-back
+      of the last row after writes (`async_block_till_done` alone is racy: it returns at once
+      while the recorder is mid-task), and a join check in `_async_write_series` that heals a bad join on the next poll.
+      Tests: `test_chain_*` in `test_ha_statistics.py` (two seeded breaks failed before the fix).
+- [x] **Detector and trail:** after-write check, short-label warning, one Repairs notice per
+      entry with a fix that reprices, and a last-20-writes trail in diagnostics. Local only.
+- [ ] Not verified live: the Repairs fix on the user's HA, and `async_block_till_done` on HA
+      2026.11 (tests ran on 2026.2.3, where it is what the recorder test helpers use).
+- [ ] Not covered: a break in older history that no write touches (writes start only at a
+      poll window or a chosen repair day, which are checked, so this should not arise).
+
 ## Backlog / ideas
 
 - [ ] United Energy support: same portal, different username suffix (brand `UE`).
