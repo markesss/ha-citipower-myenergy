@@ -106,7 +106,9 @@ Then, in the Energy dashboard:
 **Supply charge in period costs.** When you turn the per-period statistics on with a
 time-of-use tariff, *Configure → Electricity tariff and costs → Statistics per tariff period*
 asks where the daily supply charge goes. The step shows the daily amount, for example
-`AUD 0.89628`.
+`AUD 0.89628`. There is no separate menu item for it: it is the screen that follows pressing
+**Submit** on *Statistics per tariff period* with the switch on. To change the choice later, open
+that same screen, leave the switch on, and submit.
 
 | Choice | What the period costs hold | Use it when |
 |---|---|---|
