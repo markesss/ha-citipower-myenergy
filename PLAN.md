@@ -393,15 +393,17 @@ open-ended, thresholds ascending.
         be stable, unique and survive renames sensibly (decide: slug from name, collisions
         suffixed; renaming a period creates new statistics, leaving the old ones orphaned,
         so warn in the UI).
-      - **Supply charge: use HA's own fixed daily adjustment** (`cost_adjustment_day` on the
-        grid source). The per-period cost statistics therefore **exclude** the supply
-        charge; the combined cost statistic keeps including it. The UI must show the value
-        to enter: supply charge x (1 - discount), GST-adjusted exactly as `tariff.py` does
-        (GLOHOME: 92.40 c x 0.97 = $0.89628/day), and say plainly that it is a fixed number:
-        when a new tariff version changes the supply charge or discount, the user must
-        update the dashboard adjustment themselves. Never enable both the combined cost
-        source and the per-period sources on the dashboard (it double counts); say so in the
-        UI text and README.
+      - **Supply charge: not applied in per-period mode** (HA's daily adjustment is not
+        applied with TOU billing meters; user decision 16 Nov 2026 to document it). This
+        **supersedes the earlier decision to use HA's fixed daily adjustment** (`cost_adjustment_day`).
+        The per-period cost statistics **exclude** the supply charge; the combined cost
+        statistic keeps including it, and the values are unchanged. The UI shows the daily
+        supply amount for reference only (supply charge x (1 - discount), GST-adjusted
+        exactly as `tariff.py` does; GLOHOME: 92.40 c x 0.97 = $0.89628/day), says the
+        dashboard does not add it, and says to leave the dashboard's daily adjustment at 0.
+        To see the full cost use the combined cost statistic, never alongside the per-period
+        sources (it double counts); the UI text and README say so. Possible future fix:
+        attach it to the first-hour period cost or add a supply-charge source.
       - Per-period costs must sum with the supply charge to the combined cost: add a test
         (sum of period costs + days x daily supply == combined cost) at hour and day level.
       - Reuse the whole-day pricing and repair logic; a tariff version or reading change
@@ -446,10 +448,12 @@ open-ended, thresholds ascending.
         exists; a failure there is logged (with traceback) and never stops the kWh import or
         the combined cost.
       - UI: tariff menu entry "Statistics per tariff period" (only with a valid tariff): a
-        switch plus text with the exact daily adjustment (`AUD 0.89628` for GLOHOME), the
-        statistic ids, the double-count warning, "one grid source only" and "fixed number".
-        Saving reloads the entry (existing listener) and the first poll backfills. Recalculate
-        passes the option through. Strings and `translations/en.json` identical.
+        switch plus text with the daily supply amount for reference only (`AUD 0.89628` for
+        GLOHOME), the statistic ids and the double-count warning; it says the supply charge is
+        not applied in this mode and to leave the dashboard's daily adjustment at 0 (reworded
+        16 Nov 2026, see the decision above). Saving reloads the entry (existing listener) and
+        the first poll backfills. Recalculate passes the option through. Strings and
+        `translations/en.json` identical.
       - **Backfill cost:** pricing 515 days into 6 statistics (74,160 rows) takes ~0.09 s of
         CPU to build (measured), written through the recorder queue, so it does not block setup
         noticeably; the poll's portal fetch is still only the last 7 days.
@@ -458,18 +462,107 @@ open-ended, thresholds ascending.
         Tests added in `tests/test_ha_diagnostics.py`.
       - Docs: README "Cost tracking" section, `docs/ARCHITECTURE.md` "Cost tracking" section and
         diagram nodes, `CLAUDE.md` layout lines appended.
-      - **Which grid source gets the daily adjustment, and how sure that is.** Verified: in
-        HA 2026.2.3's `energy/data.py` the grid source schema has a single required
-        `cost_adjustment_day` per grid source (not per `flow_from` entry), and the live
-        HA 2026.11.1 preferences hold one `cost_adjustment_day` on each grid entry (read via
-        `energy/get_prefs`). NOT verified: the frontend arithmetic (the frontend package is not
-        in the test image, so I could not read how it sums the adjustment across sources).
-        The UI text therefore says "on one grid source only, leave the others at 0" and asks
-        the user to check one day (dashboard grid cost = period costs + the adjustment). If
-        the dashboard turns out to apply it once overall, or to need it on every source,
-        change the wording in `strings.json` and the README.
-      - Known limit: the fixed adjustment is applied by the dashboard to every day shown,
-        including days before the tariff's first version and days under older rates.
+      - **Superseded: the daily adjustment.** The build agent wrote the UI to ask for the
+        adjustment on one grid source only. The live test showed the dashboard does **not**
+        apply `cost_adjustment_day` to per-period (TOU) sources, so that advice was removed;
+        the supply charge is simply not shown in per-period mode (see the decision above).
+- [x] **Tariff timezone option (16 Nov 2026; supersedes "always fixed AEST").** The user found
+      GloBird charges TOU periods on the clock *with* daylight saving, so the AEST-only rule
+      was wrong for them. Decisions:
+      - Each tariff version gets a `timezone` (IANA name). Periods, the local day (midnight to
+        midnight, so 23 or 25 hours on changeover days) and the daily supply charge use it.
+      - The UI offers a **short list**, not every zone: Australian zones plus GMT. Only zones
+        with a **whole-hour UTC offset** can be offered, because the statistics are hourly
+        on UTC hour boundaries and whole-hour windows must line up with them. So: Melbourne,
+        Sydney, Hobart, Canberra (AEST/AEDT), Brisbane (AEST, no DST; this is also the
+        NEM/market clock), Perth (AWST), and GMT (UTC). **Not offered: Adelaide, Broken Hill,
+        Darwin, Eucla, Lord Howe** (half-hour or 45-minute offsets; would need half-hour
+        statistics). Say so in the UI text and README.
+      - **Default for new tariffs: Australia/Melbourne** (Victorian networks). **A stored tariff
+        with no timezone keeps pricing on fixed AEST (UTC+10, no DST)**, i.e. exactly what
+        v0.2.0b1/b2 did, so nothing reprices silently. The options flow shows the stored
+        value and tells the user how to change it.
+      - Changing the timezone changes how history is priced: saving a changed timezone must
+        prompt for or trigger "Recalculate cost history" (and the period statistics).
+      - Replaces the fixed "all times are AEST" text with a timezone selector plus a note that
+        retailer sheets say "local time" and the bill is the authority; mention that the
+        dashboard's own day follows Home Assistant's timezone.
+      - `tzdata` goes into `requirements-dev.txt`; tests must cover DST changeover days
+        (23 and 25 hour days: first-hour supply charge, tiers, per-period breakdown, the
+        whole-day statistics writer, repair, recalculation) and the GMT and Brisbane cases.
+
+      **Built (uncommitted; 394 tests pass in Docker, Python 3.13, HA test package 2026.2.3,
+      ruff clean). Not yet tried on the live HA.**
+      - `tariff.py`: `TariffVersion.timezone` (IANA name or `None`), `ALLOWED_TIMEZONES`
+        (Melbourne, Sydney, Hobart, Canberra, Brisbane, Perth, GMT), `DEFAULT_TIMEZONE`
+        (Melbourne), `LEGACY_TIMEZONE` (Brisbane), public `zone_for`. `None` is fixed AEST
+        (`const.MARKET_TZ`, no tz database needed); `GMT` is `UTC`; the rest use `zoneinfo`.
+        A missing database raises `TariffError` naming `tzdata`. `UTC` is accepted on input and
+        stored as `GMT`. `to_dict` omits the key when unset, so a stored tariff round-trips
+        unchanged and nothing reprices until the user saves a choice. `timezone_mode` is still
+        rejected, now pointing at `timezone`.
+      - **Local day:** `local_day(moment, tz)` and `local_day_hours(day, tz)` (default AEST, so
+        existing callers are unchanged); a day is midnight to midnight on the tariff's clock,
+        23 or 25 hours on changeover days. Windows match the local wall-clock hour, so on a
+        25-hour day the repeated hour matches its window twice and on a 23-hour day the skipped
+        hour does not exist. Supply charge: once, on the first real hour of the local day.
+        Tiers reset at local midnight. Per-period breakdown invariants hold on those days.
+      - **Decision: one clock per tariff.** `Tariff.validate` rejects versions with different
+        zones (no zone and Brisbane count as the same clock). Mixing them would leave an hour
+        belonging to no day, or to two, at the version boundary; a retailer's clock does not
+        change with its prices. The UI sets the zone for every version at once.
+      - **Whole-hour offsets are asserted by a test** over four years for every offered zone,
+        and the refused zones (Adelaide, Darwin, Eucla, Lord Howe, Broken Hill) are checked to
+        really have fractional offsets.
+      - `statistics.py`: `_complete_days` and the repair start use the tariff's clock and each
+        day's real hours (24, 23 or 25); a day with the wrong number of readings is not written.
+      - **Bug found and fixed while testing a zone change:** a rewrite covers whole local days,
+        so after a clock change the last complete day ends at a different instant and an hour
+        priced on the old clock was left just beyond the rewritten rows with its OLD running
+        total, which the dashboard would show as a one-hour spike or dip until the next day
+        completed. `_async_keep_the_tail` now re-chains any stored rows after a rewrite (keeping
+        their own state, recalculating their sum). A test fails without it (stale sum 5.30299
+        against 5.46304). A stray old-clock hour at the very START of history is harmless: the
+        rewrite's base sum includes it, so the rows still add up.
+      - Options flow: the fixed AEST text is replaced by a **Pricing clock** drop-down in the
+        Basics step (exactly the allowed zones, labelled "Melbourne (AEST/AEDT, follows
+        daylight saving)", ..., "Brisbane (AEST, no daylight saving; NEM time)", "Perth (AWST,
+        no daylight saving)", "GMT"; default Melbourne for a new tariff; a stored tariff with no
+        zone shows Brisbane, with a note that it is fixed AEST). Help text: retailer sheets say
+        "local time" so the bill is the authority; the five half-hour zones are not offered and
+        why; the dashboard's day follows Home Assistant's timezone. Every step that shows times
+        carries a `{timezone}` sentence naming the chosen clock; the review map is headed with
+        the clock and mentions 23/25-hour days for DST zones. The tariff menu summary ends with
+        "Clock: ...". Choosing Brisbane on a tariff with no stored zone writes nothing.
+      - **Saving a changed clock:** the flow asks first (`tariff_timezone_changed`): a ticked box
+        (default on) recalculates ALL recorded costs now, from the stored readings, using the NEW
+        tariff and before the options are saved, so the reload that follows finds nothing to
+        change; unticking saves anyway and the text says to run "Recalculate cost history"
+        later. If the recalculation fails the question stays open with an error and nothing is
+        saved, and the user can decline and save. A brand new tariff is not asked. The shared
+        repricing loop is `_async_reprice`, also used by the Recalculate step.
+      - Diagnostics report `timezone` and `timezone_set`. Docs: README (the clock choice table,
+        GloBird note, unsupported zones, dashboard day note), CLAUDE.md rule (NEM12 stays AEST;
+        the tariff clock is selectable; never assume 24-hour tariff days), docs/ARCHITECTURE.md,
+        docs/TESTING.md; `tzdata` added to `requirements-dev.txt`.
+      - New tests: `tests/test_tariff_timezone.py` (pure: zone list, whole-hour offsets, round
+        trips, validation, GLOHOME under Melbourne vs fixed AEST with hand-computed values,
+        25- and 23-hour days with the repeated/skipped hour, tiers resetting, per-period
+        invariants on four changeover days, GMT, Perth, Brisbane equals old behaviour);
+        `tests/test_ha_statistics.py` (25/23-hour days, wrong-length day not written, idempotent
+        re-run, fixed AEST unchanged, GMT, a zone change repricing with a consistent chain,
+        explicit recalculation across history and its idempotence, per-period invariants across
+        daylight saving); options-flow tests (selector contents and default, legacy shown as
+        Brisbane and left unwritten, the clock named on every step, the change prompt with
+        repricing, declining, failure, uniform clock, advanced YAML); form and string tests.
+      - **Risks for the first live run:** (1) the clock-change recalculation reprices from
+        2000-01-01 over every stored hour, in one go inside the options flow (the earlier
+        benchmark suggests about a tenth of a second of CPU per 74,000 rows, plus the read);
+        (2) the Docker tests ran on HA 2026.2.3, not 2026.11.1; (3) production needs a time zone
+        database: Home Assistant images have one, but a bare Windows dev machine needs
+        `tzdata`; (4) the Energy dashboard's own day follows Home Assistant's timezone
+        (Australia/Sydney on the live HA), so a few cents can move across its day edge; (5) a
+        stray old-clock hour at the end of history is re-priced when the next day completes.
 - [ ] **Later (backlog):** controlled load (`E2`), public holidays, demand charges.
 
 ### The live test plan: GloBird GLOHOME Residential (Flexible Rate), CitiPower, CZ 6

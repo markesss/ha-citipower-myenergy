@@ -53,9 +53,26 @@ tariff and costs → Set up a tariff.*
   cost history* to reprice days that are already recorded. Per-day allowances ("first 30 kWh a
   day free") are supported in the *Advanced: edit as YAML* step.
 
-> **All tariff times are AEST (UTC+10), with no daylight saving.** That is NEM (National
-> Electricity Market) time, the clock your meter data and network tariffs use. It is a pricing
-> clock, not Home Assistant's own timezone, so a 4pm peak stays at 4pm AEST all year.
+**Pick the clock your retailer's hours are on.** The *Tariff details* step has a *Pricing
+clock* choice, and every step that takes hours repeats which clock you picked. Retailer fact
+sheets only say "local time", so your bill is the authority.
+
+| Choice | Clock |
+|---|---|
+| Melbourne, Sydney, Hobart, Canberra | AEST/AEDT, following daylight saving. On the two days a year the clocks change, a day has 23 or 25 hours. |
+| Brisbane | AEST all year, no daylight saving. That is NEM (National Electricity Market) time, the clock your meter data uses. A tariff saved before this choice existed keeps using it until you change it. |
+| Perth | AWST (UTC+8), no daylight saving. |
+| GMT | UTC. |
+
+GloBird, for example, prices its time-of-use periods on the wall clock with daylight saving, so on a
+Victorian GloBird plan pick **Melbourne**, and check the first month's cost against a bill.
+Adelaide, Darwin, Broken Hill, Eucla and Lord Howe are not offered: their clocks sit half an hour
+off UTC and the statistics are hourly.
+
+It is a pricing clock, not Home Assistant's own timezone. The Energy dashboard draws its days on
+Home Assistant's timezone, so a different clock here can move a few cents across the edge of a day.
+One clock applies to every set of rates you enter. Changing it moves every window and day edge, so
+saving a changed clock offers to recalculate all recorded costs straight away.
 
 **2. Use the cost in the Energy dashboard.** *Settings → Dashboards → Energy*, edit your grid
 consumption source, and under cost choose **Use an entity tracking the total costs** and pick
@@ -78,11 +95,14 @@ Then, in the Energy dashboard:
    cost, **Use an entity tracking the total costs** with the matching `_cost` statistic.
 2. **Remove the combined grid source** (or turn off its cost). Using it as well counts your energy
    and cost twice.
-3. The period costs leave out the daily supply charge. The step shows the amount to enter (for
-   example `AUD 0.89628`) as the **daily cost adjustment**. Enter it on **one** grid source only
-   and leave the others at 0. It is a fixed number: update it yourself if your supply charge or
-   discount changes, and note it applies to every day the dashboard shows.
-4. Check one day: the dashboard's grid cost should equal the period costs plus that amount.
+3. **The daily supply charge is not applied.** The period costs leave it out, and the dashboard's
+   own daily cost adjustment is not applied when you use time-of-use (per-period) billing meters
+   like this. So the dashboard's grid cost is lower than your bill by the supply charge for each
+   day (after any discount). The step shows that daily amount for reference, for example
+   `AUD 0.89628`. Leave the dashboard's daily cost adjustment at 0 on every source.
+4. Check one day: the dashboard's grid cost should equal the period costs, which is the combined
+   cost statistic (`…_e1_cost`) minus that day's supply charge. To see the full cost including
+   the supply charge, use the combined cost statistic instead of the per-period sources.
 
 Renaming or removing a period stops its statistics being written but leaves the old ones in place;
 clear them in *Developer Tools → Statistics* if you do not want them. Turning the option off keeps

@@ -116,13 +116,17 @@ The portal carries no prices, so the user describes their tariff (options flow:
 `tariff_flow.py`, with `tariff_form.py` building the text and form handling) and it is stored
 in `entry.options["tariff"]` as `Tariff.to_dict()`. `tariff.py` is pure: a `Tariff` is a list
 of versions by effective date; each has a supply charge, discount, GST flag and independent
-import and export `Period` lists (windows in whole hours, per-day tiers). Times are always
-AEST, the NEM clock. `cost_for_day` prices one whole AEST day of hourly kWh; the supply
-charge goes on the day's first hour, GST and the discount apply to import only.
+import and export `Period` lists (windows in whole hours, per-day tiers). Windows and days
+are read on the tariff's **pricing clock**, a version's `timezone`: Melbourne, Sydney, Hobart,
+Canberra, Brisbane, Perth or GMT (only zones with whole-hour UTC offsets, because statistics are
+hourly on UTC boundaries). No `timezone` means fixed AEST, the NEM clock and what v0.2.0b1/b2
+did. A tariff has one clock for all its versions. `cost_for_day` prices one whole local day of
+hourly kWh (23, 24 or 25 hours); the supply charge goes on the day's first hour, GST and the
+discount apply to import only. NEM12 meter data is always parsed on AEST (`const.MARKET_TZ`).
 
 ```mermaid
 flowchart LR
-    kwh["stored kWh<br/>(…_e1)"] --> day["whole finished AEST days<br/>tariff.cost_for_day"]
+    kwh["stored kWh<br/>(…_e1)"] --> day["whole finished local days<br/>tariff.cost_for_day"]
     day --> cost["…_e1_cost<br/>(currency, has_sum)<br/>includes the supply charge"]
     day --> byp["cost_for_day_by_period<br/>(opt-in)"]
     byp --> per["…_e1_&lt;slug&gt; kWh and<br/>…_e1_&lt;slug&gt;_cost per period<br/>(supply charge excluded)"]
@@ -132,13 +136,21 @@ flowchart LR
   if a stored day's cost differs from what the tariff and readings now give, everything from
   that day on is rewritten with the running total recalculated. A re-run writes nothing.
   `async_recalculate_costs` reprices older history from the stored kWh.
+- **Changing the clock** moves every window and day edge, so every stored cost disagrees from the
+  first affected day and is rewritten. The options flow asks first and runs a recalculation from
+  before any stored reading, using the new tariff, then saves. A rewrite ends at the last complete
+  day on the new clock; an hour just beyond it that was priced on the old clock keeps its price
+  but is re-chained (`_async_keep_the_tail`) so no running total points backwards, and the next
+  complete day replaces it.
 - **Per-period statistics** are optional (`period_statistics` option). Each import period gets
   a kWh and a cost statistic, so the Energy dashboard can draw each as its own coloured grid
   source. The period set is the union of all versions' period names, keyed by `period_slugs`;
   every statistic has a row for every hour (zero outside its period). All of them are repaired
-  together, so they can never disagree. The user sets the dashboard's fixed daily cost
-  adjustment to `daily_supply_dollars` on one grid source, and must not also use the combined
-  cost source. Renamed or removed periods leave their old statistics behind, unwritten.
+  together, so they can never disagree. The period costs leave out the supply charge, and
+  Home Assistant's fixed daily cost adjustment is not applied to per-period (time-of-use) sources,
+  so in this mode the supply charge does not reach the dashboard; the options step shows
+  `daily_supply_dollars` for reference only, and the user must not also use the combined cost
+  source. Renamed or removed periods leave their old statistics behind, unwritten.
 - Turning the option on backfills the whole stored history on the next poll.
 
 ## Session persistence

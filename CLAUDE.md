@@ -56,7 +56,7 @@ custom_components/citipower_myenergy/
   config_flow.py    user → method (email/SMS) → code → nmi; reauth; options
   sensor.py         latest data, latest-day kWh per channel, session status
   diagnostics.py    redacted diagnostics
-  tariff.py         PURE: tariff model + per-day pricing (AEST), per-period breakdown, slugs
+  tariff.py         PURE: tariff model + per-day pricing on a selectable clock, per-period breakdown, slugs
   tariff_form.py    PURE: helpers for the tariff options flow (form <-> dict, review text)
   tariff_flow.py    HA: the tariff steps of the options flow (menu-driven)
   (cost statistics and the opt-in per-period statistics live in statistics.py)
@@ -82,7 +82,10 @@ tests/
   Never commit a HAR. Never paste one into a file in this repo. See
   `docs/TESTING.md` → *Capturing new portal traffic*.
 - **NEM12 times are market time (AEST, UTC+10, no DST).** Use
-  `const.MARKET_TZ`, never `Australia/Melbourne`, for interval timestamps.
+  `const.MARKET_TZ`, never `Australia/Melbourne`, for interval timestamps. The *tariff's*
+  pricing clock is a separate, user-selectable setting (`tariff.py`: whole-hour Australian
+  zones plus GMT; a version with no zone means fixed AEST), so a tariff day can be 23 or 25
+  hours. Never use it to read meter data, and never assume a tariff day has 24 hours.
 - **The statistics running sum must never double-count.** Any change to
   `statistics.py` needs a test in `test_ha_statistics.py`.
 - **All portal traffic goes through `tls.async_create_session`.** The portal omits its
