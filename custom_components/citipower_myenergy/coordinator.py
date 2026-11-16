@@ -16,6 +16,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from homeassistant.util import dt as dt_util
 
 from .api import MyEnergyApi
+from .chain_guard import guard_for
 from .const import (
     CONF_KEEPALIVE_MINUTES,
     CONF_PERIOD_STATS,
@@ -91,6 +92,8 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         self.site_name = name
         self._store = store
         self._signed_in_at = signed_in_at
+        # The repair notice for a cost statistic that does not join is per entry.
+        guard_for(hass, nmi).entry_id = entry.entry_id
         self._cancel_keepalive: Callable[[], None] | None = None
         self._last_contact: datetime | None = None
         self.last_keepalive: datetime | None = None

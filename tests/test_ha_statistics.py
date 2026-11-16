@@ -1175,3 +1175,396 @@ async def test_supply_mode_spread_across_daylight_saving_adds_up_on_23_and_25_ho
     )
     for slug in SLUGS:
         _assert_consistent(_pair(rows, slug)[1])
+
+
+# --- A running total that does not join the row before it ----------------------------------
+#
+# Seen live: after the supply-charge mode was changed and the options-flow recalculation ran
+# while the first poll after the reload was also writing, the Off Peak cost statistic's running
+# total dropped by about $266 at the first hour of the poll's window (the other periods were
+# fine). Each row still held the right state, and every row in the window agreed with what the
+# tariff gives, so the poll never saw anything to repair. These tests build that state directly.
+
+
+def _break_the_join(rows: list[dict], metadata, from_index: int, by: float):
+    """Rewrite the rows from an index on with running totals that are ``by`` too low."""
+    from homeassistant.components.recorder.statistics import async_add_external_statistics
+
+    return (
+        metadata,
+        [
+            {
+                "start": dt_util.utc_from_timestamp(row["start"]),
+                "state": row["state"],
+                "sum": row["sum"] - by,
+            }
+            for row in rows[from_index:]
+        ],
+        async_add_external_statistics,
+    )
+
+
+def _joins(rows: list[dict]) -> list[int]:
+    """Return the indexes whose running total is not the previous total plus their own state."""
+    return [
+        index
+        for index in range(1, len(rows))
+        if abs(rows[index]["sum"] - rows[index - 1]["sum"] - rows[index]["state"]) > 1e-5
+    ]
+
+
+async def test_chain_a_period_cost_total_that_does_not_join_is_repaired_by_the_next_poll(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    from custom_components.citipower_myenergy.statistics import _period_metadata
+
+    channel = _channel([1.0] * 96)  # four days
+    await _write_all(hass, channel, _glohome(), SUPPLY_SPREAD)
+    _, off_cost_meta = _period_metadata(hass, NMI, "Home", "Off-peak", "off_peak")
+    before = await _rows_of(hass, off_cost_meta["statistic_id"])
+    _assert_consistent(before)
+
+    # Day three onward carries a total that is $10 too low: the join at hour 48 is broken.
+    metadata, data, add = _break_the_join(before, off_cost_meta, 48, 10.0)
+    add(hass, metadata, data)
+    broken = await _rows_of(hass, off_cost_meta["statistic_id"])
+    assert _joins(broken) == [48]
+
+    # The poll's window is the last two days. Every state in it is right, so nothing differs.
+    window = _channel([1.0] * 48, start=START + timedelta(hours=48))
+    await async_insert_period_statistics(
+        hass, NMI, "Home", window, _glohome(), supply_mode=SUPPLY_SPREAD
+    )
+
+    after = await _rows_of(hass, off_cost_meta["statistic_id"])
+    assert _joins(after) == [], "the running total still jumps where the window starts"
+    _assert_consistent(after)
+    assert len(after) == 96
+    assert [row["state"] for row in after] == pytest.approx([row["state"] for row in before])
+
+
+async def test_chain_a_combined_cost_total_that_does_not_join_is_repaired_by_the_next_poll(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    channel = _channel([1.0] * 96)
+    await _write_all(hass, channel, _glohome(), SUPPLY_NONE)
+    before = await _stored_cost(hass)
+    _assert_consistent(before)
+    from custom_components.citipower_myenergy.statistics import _cost_metadata
+
+    metadata, data, add = _break_the_join(before, _cost_metadata(hass, NMI, "E1", "Home"), 48, 10.0)
+    add(hass, metadata, data)
+    assert _joins(await _stored_cost(hass)) == [48]
+
+    window = _channel([1.0] * 48, start=START + timedelta(hours=48))
+    await async_insert_cost(hass, NMI, "Home", window, _glohome())
+
+    after = await _stored_cost(hass)
+    assert _joins(after) == []
+    _assert_consistent(after)
+    assert len(after) == 96
+
+
+async def test_chain_a_healthy_join_is_left_alone(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """The check must not churn: a poll whose window joins up cleanly writes nothing."""
+    channel = _channel([1.0] * 96)
+    await _write_all(hass, channel, _glohome(), SUPPLY_SPREAD)
+    before = await _period_rows(hass)
+    window = _channel([1.0] * 48, start=START + timedelta(hours=48))
+    written = await async_insert_period_statistics(
+        hass, NMI, "Home", window, _glohome(), supply_mode=SUPPLY_SPREAD
+    )
+    assert written == 0
+    assert await _period_rows(hass) == before
+
+
+@pytest.mark.parametrize("order", ["recalculate first", "poll first"])
+async def test_chain_a_recalculation_and_a_poll_at_the_same_time_leave_every_total_joined(
+    recorder_mock: Recorder, hass: HomeAssistant, order: str
+) -> None:
+    """The live sequence: history is on the old mode, then a recalculation to a new mode and
+    the first poll after the reload both write. Both are started together here."""
+    import asyncio
+
+    channel = _channel([1.0] * 96)
+    await _write_all(hass, channel, _glohome(), SUPPLY_NONE)
+    window = _channel([1.0] * 48, start=START + timedelta(hours=48))
+
+    recalculate = async_recalculate_costs(
+        hass,
+        NMI,
+        "Home",
+        "E1",
+        _glohome(),
+        date(2000, 1, 1),
+        period_statistics=True,
+        supply_mode=SUPPLY_SPREAD,
+    )
+    poll = async_insert_period_statistics(
+        hass, NMI, "Home", window, _glohome(), supply_mode=SUPPLY_SPREAD
+    )
+    first, second = (recalculate, poll) if order == "recalculate first" else (poll, recalculate)
+    await asyncio.gather(first, second)
+
+    rows = await _period_rows(hass)
+    for slug in SLUGS:
+        kwh, cost = _pair(rows, slug)
+        assert _joins(cost) == [], f"{slug}: running total does not join"
+        assert _joins(kwh) == [], f"{slug} kWh: running total does not join"
+        _assert_consistent(cost)
+    total = sum(_pair(rows, slug)[1][-1]["sum"] for slug in SLUGS)
+    assert total == pytest.approx(4 * DAY_COST, abs=1e-3)  # four days, supply charge included
+
+
+# --- The detector, the write trail and the one-writer lock ---------------------------------
+
+
+async def _seed_broken_join(hass: HomeAssistant) -> str:
+    """Write four spread days, then break the Off Peak cost join at hour 48; return its id."""
+    from custom_components.citipower_myenergy.statistics import _period_metadata
+
+    await _write_all(hass, _channel([1.0] * 96), _glohome(), SUPPLY_SPREAD)
+    _, meta = _period_metadata(hass, NMI, "Home", "Off-peak", "off_peak")
+    rows = await _rows_of(hass, meta["statistic_id"])
+    metadata, data, add = _break_the_join(rows, meta, 48, 10.0)
+    add(hass, metadata, data)
+    assert _joins(await _rows_of(hass, meta["statistic_id"])) == [48]
+    return meta["statistic_id"]
+
+
+def _window_poll(hass: HomeAssistant):
+    window = _channel([1.0] * 48, start=START + timedelta(hours=48))
+    return async_insert_period_statistics(
+        hass, NMI, "Home", window, _glohome(), supply_mode=SUPPLY_SPREAD
+    )
+
+
+def _issue(hass: HomeAssistant, guard):
+    from homeassistant.helpers import issue_registry as ir
+
+    from custom_components.citipower_myenergy.const import DOMAIN
+
+    return ir.async_get(hass).async_get_issue(DOMAIN, guard.issue_id)
+
+
+async def test_chain_a_found_break_is_logged_without_the_nmi_and_kept_in_the_trail(
+    recorder_mock: Recorder, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    from custom_components.citipower_myenergy.chain_guard import guard_for
+
+    await _seed_broken_join(hass)
+    caplog.clear()
+    await _window_poll(hass)
+
+    warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("e1_off_peak_cost" in m and "does not join" in m for m in warnings)
+    assert not any(NMI in m for m in warnings), "a warning names the NMI"
+
+    guard = guard_for(hass, NMI)
+    repaired = [r for r in guard.trail if r.join_repaired]
+    assert [r.statistic for r in repaired] == ["e1_off_peak_cost"]
+    assert repaired[0].who == "poll"
+    assert repaired[0].verified is True
+    # It healed in the same poll, so there is nothing left to repair and no notice.
+    assert guard.broken == {}
+    assert _issue(hass, guard) is None
+
+
+async def test_chain_a_break_that_survives_the_write_raises_the_notice_until_a_check_passes(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    from unittest.mock import patch
+
+    from custom_components.citipower_myenergy.chain_guard import guard_for
+
+    statistic_id = await _seed_broken_join(hass)
+    guard = guard_for(hass, NMI)
+    guard.entry_id = "entry123"
+
+    # A write that never lands, so the check after it still finds the break.
+    with (
+        patch("custom_components.citipower_myenergy.statistics.async_add_external_statistics"),
+        patch("custom_components.citipower_myenergy.statistics._STORED_WAIT_ATTEMPTS", 1),
+    ):
+        await _window_poll(hass)
+    issue = _issue(hass, guard)
+    assert issue is not None
+    assert issue.translation_key == "chain_break"
+    assert issue.is_fixable is True
+    assert issue.translation_placeholders["statistic"] == "e1_off_peak_cost"
+    assert NMI not in str(issue.translation_placeholders) + str(issue.issue_id)
+    assert "e1_off_peak_cost" in guard.broken
+
+    # The next poll writes properly, the check passes and the notice goes.
+    await _window_poll(hass)
+    assert _joins(await _rows_of(hass, statistic_id)) == []
+    assert guard.broken == {}
+    assert _issue(hass, guard) is None
+
+
+async def test_chain_a_healthy_history_logs_nothing_and_raises_nothing(
+    recorder_mock: Recorder, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    from custom_components.citipower_myenergy.chain_guard import guard_for
+
+    await _write_all(hass, _channel([1.0] * 96), _glohome(), SUPPLY_SPREAD)
+    caplog.clear()
+    await _window_poll(hass)
+    assert not [r for r in caplog.records if r.levelname == "WARNING"]
+    guard = guard_for(hass, NMI)
+    assert guard.broken == {} and _issue(hass, guard) is None
+
+
+async def test_chain_the_trail_records_polls_and_recalculations(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    from custom_components.citipower_myenergy.chain_guard import TRAIL_LENGTH, guard_for
+
+    await _write_all(hass, _channel([1.0] * 96), _glohome(), SUPPLY_NONE)
+    await async_recalculate_costs(
+        hass,
+        NMI,
+        "Home",
+        "E1",
+        _glohome(),
+        date(2000, 1, 1),
+        period_statistics=True,
+        supply_mode=SUPPLY_SPREAD,
+    )
+    trail = list(guard_for(hass, NMI).trail)
+    assert {r.who for r in trail} == {"poll", "recalculate"}
+    recalculated = [
+        r for r in trail if r.who == "recalculate" and r.statistic == "e1_off_peak_cost"
+    ]
+    assert recalculated and recalculated[-1].supply_mode == SUPPLY_SPREAD
+    assert recalculated[-1].repair_from == "2000-01-01"
+    assert recalculated[-1].start_total == 0.0  # from the first row: nothing before it
+    assert recalculated[-1].rows == 96 and recalculated[-1].verified is True
+    assert all(NMI not in str(record) for record in trail)
+    for _ in range(TRAIL_LENGTH + 5):
+        await _window_poll(hass)
+    assert len(guard_for(hass, NMI).trail) == TRAIL_LENGTH
+
+
+async def test_chain_two_writers_never_overlap(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    """A recalculation and a poll started together take turns; without the lock they interleave."""
+    import asyncio
+    from unittest.mock import patch
+
+    from custom_components.citipower_myenergy import statistics as stats
+
+    await _write_all(hass, _channel([1.0] * 96), _glohome(), SUPPLY_NONE)
+    events: list[str] = []
+    original = stats._async_write_series
+
+    async def spy(*args, **kwargs):
+        events.append("in")
+        await asyncio.sleep(0.02)  # a window in which the other writer would start
+        try:
+            return await original(*args, **kwargs)
+        finally:
+            events.append("out")
+
+    with patch.object(stats, "_async_write_series", spy):
+        await asyncio.gather(
+            async_recalculate_costs(
+                hass,
+                NMI,
+                "Home",
+                "E1",
+                _glohome(),
+                date(2000, 1, 1),
+                period_statistics=True,
+                supply_mode=SUPPLY_SPREAD,
+            ),
+            _window_poll(hass),
+        )
+    assert events and events == ["in", "out"] * (len(events) // 2), events
+
+
+async def test_chain_a_recalculation_waits_for_a_writer_that_holds_the_lock(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    import asyncio
+
+    from custom_components.citipower_myenergy.chain_guard import guard_for
+
+    await _write_all(hass, _channel([1.0] * 48), _glohome(), SUPPLY_NONE)
+    guard = guard_for(hass, NMI)
+    await guard.lock.acquire()
+    task = asyncio.create_task(
+        async_recalculate_costs(hass, NMI, "Home", "E1", _glohome(), date(2000, 1, 1))
+    )
+    for _ in range(20):
+        await asyncio.sleep(0)
+    assert not task.done()  # waiting, not racing
+    guard.lock.release()
+    assert await asyncio.wait_for(task, 30) == 48  # and then it completes: no deadlock
+
+
+async def test_chain_the_repairs_flow_reprices_and_clears_the_notice(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    from unittest.mock import patch
+
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.citipower_myenergy.chain_guard import guard_for
+    from custom_components.citipower_myenergy.const import CONF_PERIOD_STATS, CONF_TARIFF, DOMAIN
+    from custom_components.citipower_myenergy.repairs import async_create_fix_flow
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id=NMI,
+        data={"nmi": NMI},
+        options={
+            CONF_TARIFF: _glohome().to_dict(),
+            CONF_PERIOD_STATS: True,
+            "supply_in_periods": SUPPLY_SPREAD,
+        },
+    )
+    entry.add_to_hass(hass)
+    statistic_id = await _seed_broken_join(hass)
+    guard = guard_for(hass, NMI)
+    guard.entry_id = entry.entry_id
+    with (
+        patch("custom_components.citipower_myenergy.statistics.async_add_external_statistics"),
+        patch("custom_components.citipower_myenergy.statistics._STORED_WAIT_ATTEMPTS", 1),
+    ):
+        await _window_poll(hass)  # leaves the break standing and the notice raised
+    assert _issue(hass, guard) is not None
+
+    flow = await async_create_fix_flow(hass, guard.issue_id, {"entry_id": entry.entry_id})
+    flow.hass = hass
+    form = await flow.async_step_init()
+    assert form["type"] == "form" and form["step_id"] == "confirm"
+    result = await flow.async_step_confirm({})
+    assert result["type"] == "create_entry"
+
+    assert _joins(await _rows_of(hass, statistic_id)) == []
+    assert guard.broken == {} and _issue(hass, guard) is None
+    for slug in SLUGS:
+        _assert_consistent(_pair(await _period_rows(hass), slug)[1])
+
+
+async def test_chain_the_repairs_flow_aborts_cleanly_without_a_tariff_or_entry(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+    from custom_components.citipower_myenergy.const import DOMAIN
+    from custom_components.citipower_myenergy.repairs import async_create_fix_flow
+
+    flow = await async_create_fix_flow(hass, "chain_break_x", {"entry_id": "missing"})
+    flow.hass = hass
+    assert (await flow.async_step_init())["reason"] == "entry_missing"
+
+    entry = MockConfigEntry(domain=DOMAIN, unique_id=NMI, data={"nmi": NMI}, options={})
+    entry.add_to_hass(hass)
+    flow = await async_create_fix_flow(hass, "chain_break_x", {"entry_id": entry.entry_id})
+    flow.hass = hass
+    assert (await flow.async_step_init())["reason"] == "no_tariff"

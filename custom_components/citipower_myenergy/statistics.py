@@ -66,6 +66,7 @@ rewrites them (``async_recalculate_costs`` reaches older history).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta, tzinfo
@@ -86,6 +87,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import EnergyConverter
 
+from .chain_guard import ChainGuard, guard_for, local_hour_text
 from .const import DOMAIN
 from .nem12 import Channel
 from .tariff import (
@@ -109,6 +111,13 @@ _LOOKBACK_DAYS = (3, 45, 800)
 # Cost statistics are in dollars, kept to a millionth so rounding cannot accumulate.
 _COST_DECIMALS = 6
 _COST_TOLERANCE = 5e-7
+
+# How long to wait for rows just queued to be stored: this many looks, this far apart.
+_STORED_WAIT_ATTEMPTS = 200
+_STORED_WAIT_STEP = 0.05
+
+# How far a row's running total may differ from the row before it plus its own state.
+_CHAIN_TOLERANCE = 1e-5
 
 # The only channels a tariff prices; see the module docstring.
 _PRICED_CHANNELS = {"E1": KIND_IMPORT, "B1": KIND_EXPORT}
@@ -211,6 +220,12 @@ async def async_last_stat_start(hass: HomeAssistant, statistic_id: str) -> datet
 
 async def async_insert_channel(hass: HomeAssistant, nmi: str, name: str, channel: Channel) -> int:
     """Record a channel's hourly readings; return how many hours were written."""
+    async with guard_for(hass, nmi).lock:
+        await _async_settled(hass)
+        return await _async_insert_channel(hass, nmi, name, channel)
+
+
+async def _async_insert_channel(hass: HomeAssistant, nmi: str, name: str, channel: Channel) -> int:
     now = dt_util.utcnow()
     readings = sorted(
         (hour, kwh) for hour, kwh in channel.hours.items() if hour + timedelta(hours=1) <= now
@@ -251,6 +266,23 @@ async def async_insert_channel(hass: HomeAssistant, nmi: str, name: str, channel
             statistics[-1]["start"],
         )
         async_add_external_statistics(hass, _metadata(nmi, channel.suffix, name), statistics)
+        await _async_wait_until_stored(hass, statistic_id, statistics)
+        # The kWh total is rebuilt from the portal, not by a cost recalculation, so a break here
+        # is logged and kept in the trail but does not raise the repair notice.
+        guard = guard_for(hass, nmi)
+        bad = await _async_chain_problem(hass, statistic_id, statistics[0]["start"])
+        if bad is not None:
+            _warn_not_joined(guard, statistic_id, bad, found="After writing")
+        guard.record(
+            who="poll",
+            statistic_id=statistic_id,
+            repair_from=None if repair_from is None else repair_from.isoformat(),
+            supply_mode=None,
+            start_total=running_sum - sum(row["state"] for row in statistics),
+            rows=len(statistics),
+            join_repaired=False,
+            verified=bad is None,
+        )
     return len(statistics)
 
 
@@ -306,6 +338,76 @@ async def _async_total_before(
     return 0.0, None
 
 
+async def _async_settled(hass: HomeAssistant) -> None:
+    """Wait until every statistics write queued so far has been stored.
+
+    ``async_add_external_statistics`` only queues the rows. A running total read before they
+    land is stale, and chaining new rows from it breaks the join (see ``chain_guard.py``).
+
+    ``async_block_till_done`` returns at once when the queue is empty, which is also the case
+    while the recorder is part-way through the task it just took off the queue, so rows we
+    have just written are confirmed with ``_async_wait_until_stored`` instead.
+    """
+    await get_instance(hass).async_block_till_done()
+
+
+async def _async_wait_until_stored(
+    hass: HomeAssistant, statistic_id: str, statistics: list[StatisticData]
+) -> bool:
+    """Wait until the last row just queued can be read back; return whether it could.
+
+    The rows of one write are stored together, so the last one being readable means all are.
+    """
+    await _async_settled(hass)
+    last = statistics[-1]
+    for _ in range(_STORED_WAIT_ATTEMPTS):
+        rows = await _async_rows(
+            hass, statistic_id, last["start"], last["start"] + timedelta(hours=1)
+        )
+        if rows and abs(float(rows[0].get("sum") or 0.0) - float(last["sum"])) <= _CHAIN_TOLERANCE:
+            return True
+        await asyncio.sleep(_STORED_WAIT_STEP)
+    _LOGGER.debug("Rows written to a statistic were not readable back in time")
+    return False
+
+
+async def _async_chain_problem(
+    hass: HomeAssistant, statistic_id: str, since: datetime
+) -> float | None:
+    """Return the start of the first row from ``since`` whose total does not join, or None.
+
+    A row joins when its running total is the previous row's total plus its own state. The
+    first row is checked against the stored row before ``since``, which is exactly where a
+    rewrite that started from a stale total goes wrong.
+    """
+    rows = await _async_rows(hass, statistic_id, since, dt_util.utcnow() + timedelta(hours=1))
+    rows = sorted((row for row in rows if row.get("sum") is not None), key=lambda r: r["start"])
+    if not rows:
+        return None
+    previous, before_start = await _async_total_before(hass, statistic_id, since)
+    running: float | None = previous if before_start is not None else None
+    for row in rows:
+        total, state = float(row["sum"]), row.get("state")
+        if (
+            running is not None
+            and state is not None
+            and abs(total - running - float(state)) > _CHAIN_TOLERANCE
+        ):
+            return float(row["start"])
+        running = total
+    return None
+
+
+def _warn_not_joined(guard: ChainGuard, statistic_id: str, bad_start: float, *, found: str) -> None:
+    """Log a chain problem by the statistic's short label and the local hour (never the NMI)."""
+    _LOGGER.warning(
+        "%s: the running total of %s does not join the row before it at %s",
+        found,
+        guard.label(statistic_id),
+        local_hour_text(dt_util.utc_from_timestamp(bad_start)),
+    )
+
+
 # --- Cost ---------------------------------------------------------------------------
 
 
@@ -349,6 +451,7 @@ async def _async_write_costs(
     hours: dict[datetime, float],
     *,
     reprice_from: date | None = None,
+    who: str = "poll",
 ) -> int:
     """Price whole days of readings and store the cost rows; return how many were written."""
     kind = _prices_channel(suffix, tariff)
@@ -368,9 +471,11 @@ async def _async_write_costs(
 
     return await _async_write_series(
         hass,
+        nmi,
         [_Series(_cost_metadata(hass, nmi, suffix, name), expected)],
         tariff.tzinfo,
         reprice_from=reprice_from,
+        who=who,
     )
 
 
@@ -384,10 +489,13 @@ class _Series:
 
 async def _async_write_series(
     hass: HomeAssistant,
+    nmi: str,
     series: list[_Series],
     tz: tzinfo,
     *,
     reprice_from: date | None = None,
+    who: str = "poll",
+    supply_mode: str | None = None,
 ) -> int:
     """Store whole days of expected values for statistics that are repaired together.
 
@@ -397,7 +505,20 @@ async def _async_write_series(
     own row before it. With nothing in disagreement only rows newer than each statistic's
     newest are added, so an unchanged re-run writes nothing. Returns the most hours written
     to any one statistic.
+
+    The caller holds the NMI's guard lock (``chain_guard.py``). Two further protections:
+
+    * A stored row whose running total does not join the row before it (the first stored row
+      of the window is checked against the row just before the window) counts as a
+      disagreement from that row's day, so a bad join is rewritten even though every state in
+      the window is right. Without this the poll would never look at the join at its window's
+      start, which is where a stale starting total leaves its mark.
+    * After a statistic is written the recorder is awaited and the rows are checked again
+      from the first written row. A failure is logged and keeps the repair notice raised
+      until a later check passes.
     """
+    guard = guard_for(hass, nmi)
+    await _async_settled(hass)
     reference = series[0].expected
     first_hour = min(min(rows) for rows in reference.values())
     last_hour = max(max(rows) for rows in reference.values()) + timedelta(hours=1)
@@ -421,13 +542,31 @@ async def _async_write_series(
             if day is not None and (repair_day is None or day < repair_day):
                 repair_day = day
 
+    # A stored row that does not join the one before it. Not looked for when the caller asked
+    # for a rewrite from a day: that rebuilds the chain from the row before the day anyway.
+    broken_join: set[str] = set()
+    if reprice_from is None:
+        for item in series:
+            statistic_id = item.metadata["statistic_id"]
+            by_start = stored[statistic_id]
+            if not by_start:
+                continue
+            first_stored = dt_util.utc_from_timestamp(min(by_start))
+            bad = await _async_chain_problem(hass, statistic_id, first_stored)
+            if bad is not None:
+                broken_join.add(statistic_id)
+                _warn_not_joined(guard, statistic_id, bad, found="Found")
+                day = local_day(dt_util.utc_from_timestamp(bad), tz)
+                if repair_day is None or day < repair_day:
+                    repair_day = day
+
     written = 0
     for item in series:
         statistic_id = item.metadata["statistic_id"]
         if repair_day is not None:
             start_of_day = local_day_hours(repair_day, tz)[0]
             running_sum, last_start = await _async_total_before(hass, statistic_id, start_of_day)
-            _LOGGER.info("Rewriting %s from %s", statistic_id, repair_day)
+            _LOGGER.info("Rewriting %s from %s", guard.label(statistic_id), repair_day)
         else:
             last = await get_instance(hass).async_add_executor_job(
                 get_last_statistics, hass, 1, statistic_id, True, {"sum"}
@@ -439,6 +578,7 @@ async def _async_write_series(
             else:
                 running_sum, last_start = 0.0, None
 
+        start_total = running_sum
         statistics: list[StatisticData] = []
         for day, rows in item.expected.items():
             if repair_day is not None and day < repair_day:
@@ -452,14 +592,33 @@ async def _async_write_series(
         if repair_day is not None and statistics:
             running_sum = await _async_keep_the_tail(hass, statistic_id, statistics, running_sum)
 
+        verified: bool | None = None
         if statistics:
             _LOGGER.debug(
                 "Adding %s hours to %s (through %s)",
                 len(statistics),
-                statistic_id,
+                guard.label(statistic_id),
                 statistics[-1]["start"],
             )
             async_add_external_statistics(hass, item.metadata, statistics)
+            await _async_wait_until_stored(hass, statistic_id, statistics)
+            bad = await _async_chain_problem(hass, statistic_id, statistics[0]["start"])
+            verified = bad is None
+            if bad is not None:
+                _warn_not_joined(guard, statistic_id, bad, found="After writing")
+            guard.report(statistic_id, bad)
+        elif statistic_id not in broken_join:
+            guard.report(statistic_id, None)  # a clean check clears an earlier failure
+        guard.record(
+            who=who,
+            statistic_id=statistic_id,
+            repair_from=None if repair_day is None else repair_day.isoformat(),
+            supply_mode=supply_mode,
+            start_total=start_total,
+            rows=len(statistics),
+            join_repaired=statistic_id in broken_join,
+            verified=verified,
+        )
         written = max(written, len(statistics))
     return written
 
@@ -524,6 +683,13 @@ async def async_insert_cost(
     hass: HomeAssistant, nmi: str, name: str, channel: Channel, tariff: Tariff
 ) -> int:
     """Price a channel's readings and record the cost; return how many hours were written."""
+    async with guard_for(hass, nmi).lock:
+        return await _async_insert_cost(hass, nmi, name, channel, tariff)
+
+
+async def _async_insert_cost(
+    hass: HomeAssistant, nmi: str, name: str, channel: Channel, tariff: Tariff
+) -> int:
     suffix = channel.suffix
     if _prices_channel(suffix, tariff) is None:
         return 0
@@ -558,17 +724,28 @@ async def async_recalculate_costs(
     With ``period_statistics`` the import channel's per-period statistics are rewritten too
     (from the current period list) with ``supply_mode`` deciding where the supply charge goes
     in their costs. The return value counts the combined cost's hours only.
+
+    Takes the NMI's write lock, so it waits for a poll that is writing and the poll waits for it.
     """
-    start = local_day_hours(from_day, tariff.tzinfo)[0]
-    hours = await _async_stored_hours(hass, nmi, suffix, start)
-    written = await _async_write_costs(
-        hass, nmi, name, suffix, tariff, hours, reprice_from=from_day
-    )
-    if period_statistics and suffix.upper() == "E1":
-        await _async_write_periods(
-            hass, nmi, name, tariff, hours, reprice_from=from_day, supply_mode=supply_mode
+    async with guard_for(hass, nmi).lock:
+        await _async_settled(hass)  # the stored kWh read below must include every queued row
+        start = local_day_hours(from_day, tariff.tzinfo)[0]
+        hours = await _async_stored_hours(hass, nmi, suffix, start)
+        written = await _async_write_costs(
+            hass, nmi, name, suffix, tariff, hours, reprice_from=from_day, who="recalculate"
         )
-    return written
+        if period_statistics and suffix.upper() == "E1":
+            await _async_write_periods(
+                hass,
+                nmi,
+                name,
+                tariff,
+                hours,
+                reprice_from=from_day,
+                supply_mode=supply_mode,
+                who="recalculate",
+            )
+        return written
 
 
 # --- Per-period statistics ----------------------------------------------------------
@@ -615,13 +792,22 @@ async def _async_write_periods(
     *,
     reprice_from: date | None = None,
     supply_mode: str = SUPPLY_NONE,
+    who: str = "poll",
 ) -> int:
     """Price whole days into every period's statistics together; return hours written."""
     days = _complete_days(hours, dt_util.utcnow(), tariff.tzinfo)
     if not days:
         return 0
     series = _period_series(hass, nmi, name, tariff, days, supply_mode)
-    return await _async_write_series(hass, series, tariff.tzinfo, reprice_from=reprice_from)
+    return await _async_write_series(
+        hass,
+        nmi,
+        series,
+        tariff.tzinfo,
+        reprice_from=reprice_from,
+        who=who,
+        supply_mode=supply_mode,
+    )
 
 
 async def async_insert_period_statistics(
@@ -638,6 +824,18 @@ async def async_insert_period_statistics(
     no rows yet) the stored kWh history is priced too, not just this poll's window: turning
     the option on backfills everything the dashboard already has.
     """
+    async with guard_for(hass, nmi).lock:
+        return await _async_insert_period_statistics(hass, nmi, name, channel, tariff, supply_mode)
+
+
+async def _async_insert_period_statistics(
+    hass: HomeAssistant,
+    nmi: str,
+    name: str,
+    channel: Channel,
+    tariff: Tariff,
+    supply_mode: str,
+) -> int:
     if channel.suffix.upper() != "E1":
         return 0
     hours: dict[datetime, float] = {m.astimezone(UTC): kwh for m, kwh in channel.hours.items()}

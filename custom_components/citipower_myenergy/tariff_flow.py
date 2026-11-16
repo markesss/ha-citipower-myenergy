@@ -37,8 +37,6 @@ from homeassistant.util import dt as dt_util
 
 from . import tariff_form as form
 from .const import (
-    CONF_ADDRESS,
-    CONF_DESCRIPTION,
     CONF_NMI,
     CONF_PERIOD_STATS,
     CONF_SUPPLY_MODE,
@@ -47,6 +45,8 @@ from .const import (
     SUPPLY_MODES,
 )
 from .exceptions import MyEnergyError, TariffError
+from .reprice import FAR_PAST as _FAR_PAST
+from .reprice import async_reprice_entry
 from .session_store import SessionStore
 from .statistics import async_recalculate_costs, period_statistic_ids
 from .tariff import (
@@ -66,7 +66,6 @@ TYPE_FLAT = "flat"
 TYPE_TIME_OF_USE = "tou"
 
 # Reprice "all of history" when the clock changes: from before any stored reading.
-_FAR_PAST = date(2000, 1, 1)
 
 # Errors from reading hand-edited YAML: TariffError covers the model, the rest are shapes
 # the model never sees (a list where a mapping should be, and so on).
@@ -610,28 +609,16 @@ class TariffOptionsFlow(OptionsFlow):
         The per-period switch and supply mode default to the saved options; the supply-charge
         step passes the values it is about to save instead, so history follows the new choice.
         """
-        data = self.config_entry.data
-        name = data.get(CONF_DESCRIPTION) or data.get(CONF_ADDRESS) or data[CONF_NMI]
-        store = SessionStore(self.hass)
-        await store.async_load()
-        suffixes = store.suffixes(self.config_entry.entry_id) or ["E1"]
-        if period_statistics is None:
-            period_statistics = bool(self.config_entry.options.get(CONF_PERIOD_STATS))
-        if supply_mode is None:
-            supply_mode = supply_mode_of(self.config_entry.options)
-        rows = 0
-        for suffix in suffixes:
-            rows += await async_recalculate_costs(
-                self.hass,
-                data[CONF_NMI],
-                name,
-                suffix,
-                tariff,
-                from_day,
-                period_statistics=period_statistics,
-                supply_mode=supply_mode,
-            )
-        return rows
+        return await async_reprice_entry(
+            self.hass,
+            self.config_entry,
+            tariff,
+            from_day,
+            period_statistics=period_statistics,
+            supply_mode=supply_mode,
+            # Looked up here, not bound in reprice.py, so the flow's own name is the one used.
+            recalculate=async_recalculate_costs,
+        )
 
     async def async_step_tariff_timezone_changed(
         self, user_input: dict[str, Any] | None = None
