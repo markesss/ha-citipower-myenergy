@@ -27,3 +27,4 @@ htmlcov/
 
 # Throwaway local probe; never commit
 tools/stat_probe/
+coverage.xml
