@@ -123,24 +123,38 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
 
 ## Phase 4: Session lifetime
 
-- [ ] Leave it running ≥ 6 hours. Session sensor stays `active`, and
+- [x] Leave it running ≥ 6 hours. Session sensor stays `active`, and
       `seconds_remaining` in its attributes recovers after each keep-alive.
       Note the values seen.
+      **Reported working by the user (16 Nov 2026).** The session has stayed `active` across
+      long runs and several restarts. The `seconds_remaining` values were not recorded.
       *If the session dies:* test whether `retrieveAccountHolderInfo` really
       extends it (CLAUDE.md #4). Try loading `USAGE_PAGE` as the ping instead,
       or lower the interval.
-- [ ] Restart HA mid-session: it resumes without asking for a code (the session
+- [x] Restart HA mid-session: it resumes without asking for a code (the session
       store is used, and no page load is needed).
+      **Passed (16 Nov 2026):** HA was restarted several times during 0.2.0b5 to 0.2.0b7
+      testing and the integration came back with the session `active` and no sign-in prompt.
 - [ ] Stop HA for > 2 h, then start it: a reauth prompt appears; signing in again
       resumes and fills the gap in statistics without duplicates.
 - [ ] Options: change the keep-alive interval; the entry reloads and uses it.
-- [ ] Sign out of myEnergy in a browser: confirm whether that kills the HA
+- [x] Sign out of myEnergy in a browser: confirm whether that kills the HA
       session (expected: it does, then reauth is prompted). Document the result in README.
+      **Confirmed by the user (16 Nov 2026).** Recorded here as the expected behaviour: signing
+      out ends the integration's session and HA asks to sign in again. The README's "Sessions
+      and re-signing in" section already lists signing out everywhere as a cause.
 
 ## Phase 5: Data correctness edge cases
 
 - [ ] Day-after behaviour: poll before and after ~01:00 AEST; the new day appears
       and the next poll changes nothing (`hours_added_last_fetch` = 0).
+- [x] **Accepted limitation (user, 16 Nov 2026): daylight saving versus NEM time at day edges.**
+      The meter data is on fixed AEST (NEM time) and a daylight-saving tariff prices on the
+      wall clock, so an hour near a day edge, or on a 23- or 25-hour changeover day, can be
+      counted differently from the retailer's bill. Seen as a small shortfall on a monthly bill
+      (about 1.5 kWh of Off Peak, under 1%). The cause was not confirmed against daily figures
+      and the user accepts the difference for an estimate. This is separate from the unticked
+      item above, which is about when the portal publishes a day.
 - [ ] Repair path: if an estimated (`E`/`S`) day is ever seen being replaced, confirm
       the statistics were rewritten from that hour (log line "Rewriting …").
 - [ ] Solar/export account (if one is available): `B1` appears as a separate
@@ -626,7 +640,15 @@ What this tells the design:
   hours / 515 days with 0 mismatches against an independent hour-by-hour recomputation
   (max difference $0.000001; total $1,602.37), and the running sum was consistent. The
   user selected it as the grid "total costs" source and the Energy dashboard shows it.
-  Still open: the real-bill comparison; history before the tariff's `effective_from` is
+  **Real-bill comparison done (16 Nov 2026), after the Melbourne pricing clock was set:** one
+  day matched the retailer's portal to the cent. Two monthly bills were then compared: the
+  integration was 3c under on the earlier bill and about 22c under on the latest, both well
+  under 1%. Both gaps are on the low side. On the latest bill the gap is about 1.5 kWh of
+  Off Peak (22c at the after-discount Off Peak rate), so it is a small amount of off-peak energy
+  rather than a rate or supply-charge error. Cause not confirmed: most likely a day or
+  billing-period edge, perhaps the 4 Oct 2026 clock change (a 23-hour day) falling inside that
+  bill. To pin it down, compare daily kWh with the retailer's portal for the days in the bill.
+  Judged acceptable for an estimate. History before the tariff's `effective_from` is
   priced at the first version's rates (add earlier versions and recalculate for accuracy);
   HA's energy prefs now have a native `cost_adjustment_day`, which must stay 0 because our
   cost already includes the supply charge.
@@ -694,7 +716,24 @@ What this tells the design:
       refresh, so it is always available (also with the session dead). A failed poll raises
       `HomeAssistantError`: an ended session says to sign in again (the coordinator has already
       started reauth), other failures say why with any URL query stripped. A press while its own
-      poll runs is ignored. Not verified live: the button on the user's HA.
+      poll runs is ignored. **Verified live on 0.2.0b7 (16 Nov 2026):** the button is present on
+      the device and a press polls successfully.
+
+### 0.2.0b6: setup waited for the recorder (found live, 16 Nov 2026)
+
+- [x] **Found:** on 0.2.0b5, `integration/setup_info` showed this integration's setup took 299.6 s
+      (Home Assistant's 300 s limit), against 16 s for the next slowest, and held up the rest of
+      startup. The writes added in 0.2.0b5 waited for the recorder to store their rows, but the
+      recorder thread does not work its queue until Home Assistant has started
+      (`Recorder._wait_startup_or_shutdown`), and Home Assistant cannot finish starting until
+      setup returns.
+- [x] **Fix:** `statistics.py` does not wait for the recorder, and does not read rows back to
+      check them, until `hass.state` is running (`_recorder_running`); after startup a wait
+      gives up after 20 s (`_SETTLE_TIMEOUT`). Before startup a write's trail entry has
+      `verified: None`. Tests: `test_startup_writes_do_not_wait_for_the_recorder` (hangs to its
+      timeout without the fix) and `test_a_recorder_that_never_settles_cannot_stall_a_write_forever`.
+- [x] **Verified live:** after the fix, setup took 7.1 s. On 0.2.0b7 startup is still quick and
+      there are no Repairs notices after a poll, so the join check also ran clean on a real poll.
 
 ## Backlog / ideas
 
