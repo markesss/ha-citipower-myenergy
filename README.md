@@ -83,6 +83,17 @@ the daily supply charge, so leave the dashboard's own daily cost adjustment at 0
 Nothing is written until you enter a tariff. Only whole finished days are priced, and only the
 main import channel (`E1`) is costed; controlled load is not.
 
+### How accurate is it?
+
+It is an estimate, and on the one plan it has been checked against it is close. On a live install
+(GloBird GLOHOME Flexible Rate on CitiPower, pricing clock set to Melbourne) one full day matched
+the retailer's portal to the cent, and two monthly bills were compared with the estimate: it was
+a few cents under on one and about 22c under on the other, both well under 1%. Both gaps were on
+the low side. The larger one is about 1.5 kWh of Off Peak, and daylight saving (a clock change
+fell inside that bill) is the likely cause but is not confirmed; it is tracked in the project's
+issue tracker. Treat the bill as the authority, check your own first month, and see *Pick the
+clock your retailer's hours are on* above.
+
 ### Coloured bars: statistics per tariff period (optional)
 
 The dashboard draws one source in one colour. To see each tariff period in its own colour, turn on
@@ -260,6 +271,10 @@ problem for Yarra Valley Water's portal.
   not supported yet.
 - Accounts that have never completed MFA setup in a browser need to sign in once
   at myenergy.powercor.com.au first.
+- Cost estimates can differ slightly from a bill around daylight saving. The meter data is on
+  fixed AEST (NEM time) and a daylight-saving tariff prices on the wall clock, so an hour at a
+  day edge, or on a 23- or 25-hour changeover day, can be counted differently. Expect a small
+  difference (under 1% on the bills checked so far), not an error in the rates.
 
 ## Development
 
