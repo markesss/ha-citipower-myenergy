@@ -66,16 +66,35 @@ first unchecked box.
       `_abort_if_unique_id_mismatch` (need HA ≥ 2024.11, so these should exist),
       `AddConfigEntryEntitiesCallback` (HA ≥ 2025.3), and `StatisticMetaData` fields
       (`mean_type`, `unit_class`) on the pinned HA version.
-- [ ] Add a coordinator test with a mocked `MyEnergyApi`:
+- [x] Add a coordinator test with a mocked `MyEnergyApi`:
       first run backfills from `account.start`; second run starts 7 days before
       the newest stored hour; `MyEnergyAuthError` → `ConfigEntryAuthFailed`.
-- [ ] Add a keep-alive test: ping skipped when a poll was recent; an auth error
+      `tests/test_ha_coordinator.py` (16 Nov 2026). Before it, the cost tests ran the real
+      coordinator but never asserted the fetch start or end. Also guards the clamps to
+      `account.start` and `MAX_HISTORY_DAYS`, the window counted in market time (not UTC), the
+      oldest channel setting the window, and a channel with nothing stored forcing a backfill.
+- [x] Add a keep-alive test: ping skipped when a poll was recent; an auth error
       marks the session dead, starts reauth and stops the loop; other errors retry
       after `KEEPALIVE_RETRY`.
-- [ ] Add a setup test: an entry loads, sensors appear, and the session store
+      Also in `tests/test_ha_coordinator.py`, on frozen time with no real sleeps. It also covers
+      the interval coming from the options, stop cancelling the timer, and a dead session not
+      restarting the loop. Every earlier test had patched the keep-alive out.
+- [x] Add a setup test: an entry loads, sensors appear, and the session store
       round-trips cookies/context and ignores records from a different `signed_in_at`.
-- [ ] Add an `auth.py` test against a fake portal (`aiohttp.web` test server, or
+      `tests/test_ha_session_store.py`. Covers the round trip across a simulated restart,
+      records for another `signed_in_at` or entry being ignored, unusable records, a new
+      sign-in keeping the channels, setup preferring stored cookies and falling back to the
+      entry's, the first poll persisting them, and removal forgetting only its own record.
+- [x] Add an `auth.py` test against a fake portal (`aiohttp.web` test server, or
       patch `const` URLs) that replays the fixtures through the full sign-in.
+      `tests/test_ha_auth.py`: a local `aiohttp` test server replays the anonymised fixtures
+      through the real `MyEnergyLogin` (password, then email or SMS code), refusing
+      out-of-order requests as the real portal does. **Limits:** the login page was never
+      captured (derived from `community_page.html`), and no real wrong-password or wrong-code
+      response has been seen, so those two tests prove control flow, not the portal's wording
+      (CLAUDE.md assumptions 2 and 3, still open under Phase 3). The "no verification step"
+      and first-time MFA enrolment paths have no fixtures and are not replayed. The agent broke
+      the code 15 ways on a scratch copy and each break was caught by a new test.
 - [x] Run hassfest and HACS validation locally or via CI and fix anything they report
       (manifest key order, strings, missing brand assets: `ignore: brands` is set).
       hassfest passes on both Gitea and GitHub. `hacs/action` cannot run on Gitea (it calls
