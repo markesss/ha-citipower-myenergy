@@ -805,13 +805,23 @@ statuses, a reason for every exemption, Bronze with no todo).
       GitHub job summary), fails if any module is under `MIN_COVERAGE_PERCENT` (95), and uploads
       the HTML and XML reports on GitHub only (upload-artifact v4 is not supported by Gitea).
       The manifest tier is `"silver"`; hassfest accepts the key and file (see above).
-- [ ] **Found by the coverage work, not fixed (need a code change):** (1) the Repairs fix flow
-      clears the guard's recorded failures before repricing, so a failed repricing aborts as
-      `repair_failed` with the notice already gone until a later check finds the break again
-      (`tests/test_ha_repairs.py` pins the current behaviour); (2) `MyEnergyAuraClient.async_invoke`
-      has an `if held is None: raise` branch that looks unreachable; (3) `async_send_code` keeps
-      the verification id and registration flag after raising on `isRegistration`, so a later
-      `async_verify_code` would still be sent (harmless: the config flow stops there).
+- [x] **Fixed (16 Nov 2026), found by the coverage work: a failed repair dropped the notice.** The
+      Repairs fix flow cleared the guard's recorded failures (and so the notice) before
+      repricing, so a failed repricing aborted as `repair_failed` with the notice already gone
+      until a later check found the break again. Fixed test first: three new tests in
+      `tests/test_ha_repairs.py` failed on the old code (`assert {} == {'cost_import...'}`), the
+      pin test that asserted the bug was removed, and two success-path guards were added. The
+      flow now snapshots `guard.broken`, resets as before, and calls the new
+      `ChainGuard.restore(saved)` if the repricing raises (it keeps anything the failed attempt
+      reported and keeps the notice's statistic and hour). Rejected: no up-front reset (a failure
+      for a statistic that is no longer produced would never clear, and nothing clears while the
+      recorder is not running) and reset-only-after-success (it would wipe a fresh report).
+      Mutation-checked: removing `restore` fails exactly those three tests.
+- [ ] **Found by the coverage work, not fixed (need a code change):** (2)
+      `MyEnergyAuraClient.async_invoke` has an `if held is None: raise` branch that looks
+      unreachable; (3) `async_send_code` keeps the verification id and registration flag after
+      raising on `isRegistration`, so a later `async_verify_code` would still be sent (harmless:
+      the config flow stops there).
 - [ ] **Gold:** `docs-supported-devices` (a section on supported networks and meters),
       `entity-translations` (the latest-day sensor sets its name in Python),
       `exception-translations` (no `exceptions` section in `strings.json`; the button and the
