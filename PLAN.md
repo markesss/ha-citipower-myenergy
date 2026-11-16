@@ -754,8 +754,60 @@ What this tells the design:
 - [x] **Verified live:** after the fix, setup took 7.1 s. On 0.2.0b7 startup is still quick and
       there are no Repairs notices after a poll, so the join check also ran clean on a real poll.
 
+### Quality scale self-audit (16 Nov 2026)
+
+Graded against the Home Assistant Integration Quality Scale (54 rules). This is a **custom**
+integration, and the scale's pages are written for core ones and never mention custom
+integrations, so it is a self-audit: it is not confirmed that hassfest or a manifest
+`quality_scale` key does anything for `custom_components`, and none is set. A draft
+`quality_scale.yaml` was written but is not in the repo.
+
+- [x] **Audit of 0.2.0b7:** 29 done, 12 exempt, 13 todo. No tier earned yet (a tier needs every
+      rule of it and the tiers below done or exempt).
+- [x] **Bronze blockers closed in 0.2.0b8:** `common-modules` (`entity.py`; a test pins unique ids
+      and entity ids), `config-flow-test-coverage` (`config_flow.py` 79% to 100% of lines and
+      branches, every error path with a recovery), `docs-removal-instructions` (README section).
+- [x] **`brands`:** original images (a 24-hour tariff clock with a bolt) ship in
+      `custom_components/citipower_myenergy/brand/`, following gheydon/ha-yvw (`icon`, `icon@2x`,
+      `logo`, `logo@2x`, plus `dark_logo` variants). Home Assistant reads that folder directly
+      (2026.3 onwards). **Verified live on 2026.11.1:** `/api/brands/integration/<domain>/icon.png`
+      serves it exactly as it serves ha-yvw's, and it showed once the browser cache was cleared.
+      Not confirmed: that this satisfies the rule for a custom integration. No SVG source is in
+      the repo (the images came from a script).
+- [ ] **Silver:** `integration-owner` (`codeowners` is empty), `parallel-updates` (no
+      `PARALLEL_UPDATES` in `sensor.py` or `button.py`: 0 for the read-only sensors, 1 for the
+      button), `test-coverage` (every module over 95%). At the audit, under 95%: `api.py` 56%,
+      `aura.py` 57%, `auth.py` 81%, `exceptions.py` 82%, `models.py` 87%, `repairs.py` 88%,
+      `portal.py` 89%, `nem12.py` 92% (and `config_flow.py`, since fixed). Total 92%. `api.py` and
+      `aura.py` are HTTP code with no HTTP-level tests, which is the large piece.
+- [ ] **Gold:** `docs-supported-devices` (a section on supported networks and meters),
+      `entity-translations` (the latest-day sensor sets its name in Python),
+      `exception-translations` (no `exceptions` section in `strings.json`; the button and the
+      coordinator raise plain-text errors), `icon-translations` (no `icons.json`),
+      `entity-disabled-by-default` (do NOT disable the session sensor: it is how an expired
+      session is seen; record the rule as exempt with that reason).
+- [ ] **Platinum:** `strict-typing` only (22 errors in 7 files on a lenient `mypy --strict`; no mypy
+      config or `py.typed`). `async-dependency` and `inject-websession` are exempt (no library;
+      `tls.async_create_session` is required for the missing TLS intermediate), the second being
+      a judgement call.
+- Exempt, with reasons: `action-setup`, `docs-actions`, `docs-conditions`, `docs-triggers` (no
+  actions, conditions or triggers), `dependency-transparency` (no external requirements),
+  `discovery`, `discovery-update-info` (cloud account), `dynamic-devices`, `stale-devices` (one
+  device per entry), `reconfiguration-flow` (debatable: credentials go through reauth, the NMI is
+  the entry's identity).
+
 ## Backlog / ideas
 
+- [ ] Near-real-time data via an in-home device (researched 16 Nov 2026, not started). Powercor
+      and CitiPower let a customer link a Zigbee Smart Energy device to the meter by form (MAC
+      address and install code; "usually within 5 business days"; no cost, model list or data
+      stated). The meter is the Zigbee coordinator and the device joins it as a client, so ZHA or
+      Zigbee2MQTT on an ordinary coordinator is not expected to work (install codes, Smart Energy
+      key establishment; no reports of success). Reported working on Victorian meters (United
+      Energy, not CitiPower or Powercor) with a Rainforest Eagle 3 (HA core *Rainforest Eagle*
+      integration) and an Emporia Vue Utility with ESPHome. It would be a separate integration
+      that does not use the portal. First step: phone Powercor (13 24 12) or CitiPower (13 12 80)
+      about the meter model, the fee and the report interval. Mostly second-hand forum reports.
 - [ ] United Energy support: same portal, different username suffix (brand `UE`).
 - [ ] First-time MFA enrolment (`verifyMFARegister`, `isRegistration: true`).
 - [ ] Run the first backfill as a background task so setup doesn't wait ~30 s.
