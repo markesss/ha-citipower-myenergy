@@ -57,6 +57,8 @@ custom_components/citipower_myenergy/
   sensor.py         latest data, latest-day kWh per channel, session status; with a tariff,
                     live period / rate / next-change sensors on one boundary timer (TariffTimeline)
   entity.py         shared entity base (MyEnergyEntity, device_info) for sensor and button
+  quality_scale.yaml  self-audit against the HA quality scale (custom integration: not enforced)
+  brand/            icon and logo images, read directly by Home Assistant (2026.3 and later)
   button.py         Refresh data button: an immediate poll, always available, raises on failure
   diagnostics.py    redacted diagnostics
   tariff.py         PURE: tariff model + per-day pricing on a selectable clock, per-period breakdown with supply-charge modes, slugs

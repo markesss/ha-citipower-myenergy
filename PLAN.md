@@ -759,8 +759,19 @@ What this tells the design:
 Graded against the Home Assistant Integration Quality Scale (54 rules). This is a **custom**
 integration, and the scale's pages are written for core ones and never mention custom
 integrations, so it is a self-audit: it is not confirmed that hassfest or a manifest
-`quality_scale` key does anything for `custom_components`, and none is set. A draft
-`quality_scale.yaml` was written but is not in the repo.
+`quality_scale` key does anything for `custom_components`, and none is set. The result is
+kept in `custom_components/citipower_myenergy/quality_scale.yaml` (all 54 rules, status and a
+reason each), and `tests/test_quality_scale.py` checks its structure (every rule once, valid
+statuses, a reason for every exemption, Bronze with no todo).
+- [ ] **Manifest changes needed to publish a tier (not made):** (1) add `"quality_scale":
+      "bronze"` (later `silver`, `gold`, `platinum`; accepted values are bronze, silver, gold,
+      platinum, internal, legacy, custom, no_score); (2) keep hassfest's key order, domain and
+      name first then alphabetical, so the key goes after `iot_class`/`issue_tracker` and before
+      `requirements`/`version`; (3) Silver and above need an integration owner, so fill in
+      `codeowners` (currently `[]`); (4) once the key is set, hassfest should validate
+      `quality_scale.yaml` (every slug present and spelled exactly, a valid status, a comment on
+      every exempt rule). Run hassfest in CI before tagging: it is not confirmed that it accepts
+      the key and file for a custom integration.
 
 - [x] **Audit of 0.2.0b7:** 29 done, 12 exempt, 13 todo. No tier earned yet (a tier needs every
       rule of it and the tiers below done or exempt).
