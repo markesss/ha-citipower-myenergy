@@ -193,7 +193,7 @@ class MyEnergyLogin:
                 html = await response.text()
                 landed = str(response.url)
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise cannot_connect(err) from err
+            raise cannot_connect(err) from None
 
         _LOGGER.debug(
             "MFA form post landed on %s, redirecting to %s",
@@ -229,7 +229,7 @@ class MyEnergyLogin:
                     html = await response.text()
                     final_url = str(response.url)
             except (aiohttp.ClientError, TimeoutError) as err:
-                raise cannot_connect(err) from err
+                raise cannot_connect(err) from None
 
             _LOGGER.debug("Sign-in hop %s landed on %s", hop, describe_url(final_url))
             if is_mfa_page(html):
@@ -268,7 +268,7 @@ class MyEnergyLogin:
                     raise MyEnergyApiError(f"{method} failed with HTTP {response.status}")
                 payload = await response.json(content_type=None)
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise cannot_connect(err) from err
+            raise cannot_connect(err) from None
         except ValueError as err:
             raise MyEnergyApiError(f"Could not read the response to {method}") from err
         return parse_remoting_result(payload, method)

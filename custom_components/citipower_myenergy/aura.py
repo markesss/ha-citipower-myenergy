@@ -113,10 +113,10 @@ async def async_get_page(session: aiohttp.ClientSession, url: str) -> tuple[str,
             ) as response:
                 html = await response.text()
                 final_url = str(response.url)
-        except aiohttp.TooManyRedirects as err:
-            raise MyEnergyAuthError("The portal keeps redirecting; the session has ended") from err
+        except aiohttp.TooManyRedirects:
+            raise MyEnergyAuthError("The portal keeps redirecting; the session has ended") from None
         except (aiohttp.ClientError, TimeoutError) as err:
-            raise cannot_connect(err) from err
+            raise cannot_connect(err) from None
 
         redirect = find_client_redirect(html)
         if redirect is None:
@@ -178,7 +178,7 @@ async def async_post_aura(
             text = await response.text()
             status = response.status
     except (aiohttp.ClientError, TimeoutError) as err:
-        raise cannot_connect(err) from err
+        raise cannot_connect(err) from None
 
     if status in (401, 403):
         raise MyEnergyAuthError(f"The portal refused the request (HTTP {status})")

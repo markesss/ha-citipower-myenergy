@@ -223,6 +223,10 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
       cache hit on the loop. Minor: `tls.async_create_session` leaked a session per setup. The
       entry now closes its session on unload, the config flow closes its session when the flow
       ends (and before a password retry), and one shutdown listener covers any still open.
+      Also found and fixed in 0.2.2: `cannot_connect` embedded aiohttp's message, which carries
+      the request URL, so a failed `frontdoor.jsp` hop logged the live `sid`. It now builds its
+      text from the error type, HTTP status and the URL without its query, and callers
+      raise it `from None` so no chained traceback carries the URL.
 - [ ] Optional: post on the HA community forum (thread "Reading Australian
       smart meter data" has people asking for exactly this).
 
