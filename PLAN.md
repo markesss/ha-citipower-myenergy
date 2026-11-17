@@ -234,6 +234,8 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
       others (now one shared store, same file and layout so no re-sign-in on upgrade); and
       `quality_scale.yaml` now describes the unload behaviour as tested. The Repairs fix can run
       for an entry that is not loaded, so `async_reprice_entry` primes the zones itself.
+      Last, the NMI (or a statistic id containing it) was logged by the statistics writer and the
+      coordinator's failure logs; they now use the statistic's short label and a NMI-free site name.
 - [ ] Optional: post on the HA community forum (thread "Reading Australian
       smart meter data" has people asking for exactly this).
 

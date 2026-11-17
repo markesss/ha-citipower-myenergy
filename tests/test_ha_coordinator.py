@@ -411,3 +411,33 @@ async def test_a_recovery_after_unload_does_not_restart_the_keepalive(
     coordinator.async_halt_keepalive()
     coordinator._touched()
     assert coordinator._cancel_keepalive is None
+
+
+@pytest.mark.parametrize("name", ["Home", NMI], ids=["named", "named-by-nmi"])
+async def test_a_failed_cost_write_logs_no_nmi(
+    recorder_mock: Recorder, hass: HomeAssistant, caplog: pytest.LogCaptureFixture, name: str
+) -> None:
+    """Unexpected and pricing failures name the site (or 'this meter'), never the NMI."""
+    from unittest.mock import patch
+
+    from custom_components.citipower_myenergy.exceptions import TariffError
+    from custom_components.citipower_myenergy.tariff import flat_tariff
+
+    caplog.set_level("DEBUG")
+    coordinator = _coordinator(hass)
+    coordinator.site_name = name
+    channel = _channel("E1", START, 2)
+    tariff = flat_tariff(30.0, effective_from=date(2026, 1, 1))
+    target = "custom_components.citipower_myenergy.coordinator.async_insert_cost"
+    for error in (RuntimeError("boom"), TariffError("bad price")):
+        with patch(target, AsyncMock(side_effect=error)):
+            await coordinator._async_insert_cost(channel, tariff)
+    period = "custom_components.citipower_myenergy.coordinator.async_insert_period_statistics"
+    for error in (RuntimeError("boom"), TariffError("bad price")):
+        with patch(period, AsyncMock(side_effect=error)):
+            await coordinator._async_insert_period_statistics(channel, tariff)
+
+    assert "Unexpected error recording" in caplog.text
+    assert len(caplog.records) >= 4
+    for record in caplog.records:
+        assert NMI not in record.getMessage() + (record.exc_text or "")

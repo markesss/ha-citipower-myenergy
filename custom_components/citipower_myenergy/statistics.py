@@ -251,7 +251,9 @@ async def _async_insert_channel(hass: HomeAssistant, nmi: str, name: str, channe
     if repair_from is not None:
         running_sum, last_start = await _async_total_before(hass, statistic_id, repair_from)
         _LOGGER.info(
-            "Rewriting %s from %s: the portal's readings changed there", statistic_id, repair_from
+            "Rewriting %s from %s: the portal's readings changed there",
+            guard_for(hass, nmi).label(statistic_id),
+            repair_from,
         )
 
     statistics: list[StatisticData] = []
@@ -265,7 +267,7 @@ async def _async_insert_channel(hass: HomeAssistant, nmi: str, name: str, channe
         _LOGGER.debug(
             "Adding %s hours to %s (through %s)",
             len(statistics),
-            statistic_id,
+            guard_for(hass, nmi).label(statistic_id),
             statistics[-1]["start"],
         )
         async_add_external_statistics(hass, _metadata(nmi, channel.suffix, name), statistics)

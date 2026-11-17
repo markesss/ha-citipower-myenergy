@@ -107,6 +107,11 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         self.async_add_listener(lambda: None)
 
     @property
+    def log_name(self) -> str:
+        """Return a name safe to log: the site's name, never the NMI it may fall back to."""
+        return "this meter" if self.nmi in self.site_name else self.site_name
+
+    @property
     def signed_in_at(self) -> datetime | None:
         """Return when the current session was signed in."""
         return dt_util.parse_datetime(self._signed_in_at or "")
@@ -165,7 +170,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         try:
             return Tariff.from_dict(stored)
         except TariffError as err:
-            _LOGGER.warning("Ignoring the saved tariff for %s: %s", self.site_name, err)
+            _LOGGER.warning("Ignoring the saved tariff for %s: %s", self.log_name, err)
             return None
 
     async def _async_insert_cost(self, channel: Channel, tariff: Tariff) -> None:
@@ -173,9 +178,9 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         try:
             await async_insert_cost(self.hass, self.nmi, self.site_name, channel, tariff)
         except TariffError as err:
-            _LOGGER.warning("Could not price %s for %s: %s", channel.suffix, self.site_name, err)
+            _LOGGER.warning("Could not price %s for %s: %s", channel.suffix, self.log_name, err)
         except Exception:
-            _LOGGER.exception("Unexpected error recording %s cost for %s", channel.suffix, self.nmi)
+            _LOGGER.exception("Unexpected error recording %s cost", channel.suffix)
 
     async def _async_insert_period_statistics(self, channel: Channel, tariff: Tariff) -> None:
         """Record per-period statistics; like cost, never let them stop the kWh import."""
@@ -190,14 +195,10 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
             )
         except TariffError as err:
             _LOGGER.warning(
-                "Could not price %s per period for %s: %s", channel.suffix, self.site_name, err
+                "Could not price %s per period for %s: %s", channel.suffix, self.log_name, err
             )
         except Exception:
-            _LOGGER.exception(
-                "Unexpected error recording %s per-period statistics for %s",
-                channel.suffix,
-                self.nmi,
-            )
+            _LOGGER.exception("Unexpected error recording %s per-period statistics", channel.suffix)
 
     async def _async_fetch_start(self, account: AccountInfo, end: date) -> date:
         """Decide how far back this poll needs to read."""
@@ -212,7 +213,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         ]
         if any(stamp is None for stamp in newest_per_channel):
             _LOGGER.info(
-                "Importing myEnergy history for %s from %s to %s", self.site_name, earliest, end
+                "Importing myEnergy history for %s from %s to %s", self.log_name, earliest, end
             )
             return earliest
         oldest = min(stamp for stamp in newest_per_channel if stamp is not None)
@@ -294,7 +295,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
                     return
                 _LOGGER.warning(
                     "The myEnergy session for %s has ended; sign in again to resume",
-                    self.site_name,
+                    self.log_name,
                 )
                 self._mark_dead()
                 self.config_entry.async_start_reauth(self.hass)
