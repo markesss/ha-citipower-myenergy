@@ -100,6 +100,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         self.session_seconds: int | None = None
         self.session_dead = False
         self.session_dead_since: datetime | None = None
+        self._stopped = False  # set on unload; an in-flight keep-alive must then do nothing more
 
         # The statistics import is the point of the integration, so polling
         # must continue even when no entity is listening.
@@ -226,6 +227,8 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         if self.session_dead:
             self.session_dead = False
             self.session_dead_since = None
+            # _mark_dead stopped the keep-alive; without this the session would lapse unnoticed.
+            self.async_start_keepalive()
 
     def _mark_dead(self) -> None:
         if not self.session_dead:
@@ -248,7 +251,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
     @callback
     def async_start_keepalive(self) -> None:
         """Start pinging the portal so the session never idles out."""
-        if self._cancel_keepalive is None and not self.session_dead:
+        if self._cancel_keepalive is None and not self.session_dead and not self._stopped:
             self._async_schedule_keepalive(None)
 
     @callback
@@ -257,6 +260,12 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         if self._cancel_keepalive is not None:
             self._cancel_keepalive()
             self._cancel_keepalive = None
+
+    @callback
+    def async_halt_keepalive(self) -> None:
+        """Stop for good (entry unload), including a request that is already in flight."""
+        self._stopped = True
+        self.async_stop_keepalive()
 
     @callback
     def _async_schedule_keepalive(self, delay: timedelta | None) -> None:
@@ -281,6 +290,8 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
             try:
                 await self.api.async_account_info(self.nmi)
             except MyEnergyAuthError:
+                if self._stopped:
+                    return
                 _LOGGER.warning(
                     "The myEnergy session for %s has ended; sign in again to resume",
                     self.site_name,
@@ -294,15 +305,19 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
                 reschedule = KEEPALIVE_RETRY
                 return
 
+            if self._stopped:
+                return  # unloaded mid-request: this session's cookies are no longer ours to save
             self._touched()
             self.last_keepalive = dt_util.utcnow()
             self.session_seconds = await self.api.async_session_seconds()
             _LOGGER.debug("Keep-alive ok; portal reports %ss left", self.session_seconds)
+            if self._stopped:
+                return
             await self._async_save_session()
             self.async_update_listeners()
         except Exception:
             _LOGGER.exception("Keep-alive failed unexpectedly; retrying shortly")
             reschedule = KEEPALIVE_RETRY
         finally:
-            if not self.session_dead:
+            if not self.session_dead and not self._stopped:
                 self._async_schedule_keepalive(reschedule)

@@ -61,7 +61,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> 
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
-    entry.async_on_unload(coordinator.async_stop_keepalive)
+    entry.async_on_unload(coordinator.async_halt_keepalive)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     coordinator.async_start_keepalive()
 
