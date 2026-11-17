@@ -98,9 +98,12 @@ def parse_aura_body(text: str) -> dict[str, Any]:
     if body.endswith("/*ERROR*/"):
         body = body[: -len("/*ERROR*/")]
     try:
-        return json.loads(body.strip())
+        parsed = json.loads(body.strip())
     except ValueError as err:
         raise MyEnergyApiError("Could not parse the portal response") from err
+    if not isinstance(parsed, dict):
+        raise MyEnergyApiError("Could not parse the portal response")
+    return parsed
 
 
 def extract_descriptor(html: str) -> dict[str, Any]:
@@ -165,9 +168,11 @@ def build_message(classname: str, method: str, params: dict[str, Any] | None) ->
 
 def extract_return_value(parsed: dict[str, Any]) -> Any:
     """Unwrap an Aura response, translating failures into exceptions."""
-    event = parsed.get("event") or {}
-    descriptor = event.get("descriptor", "")
-    exception_message = parsed.get("exceptionMessage", "") or ""
+    event = parsed.get("event")
+    descriptor = event.get("descriptor", "") if isinstance(event, dict) else ""
+    descriptor = descriptor if isinstance(descriptor, str) else ""
+    exception_message = parsed.get("exceptionMessage", "")
+    exception_message = exception_message if isinstance(exception_message, str) else ""
 
     # A dead session and a rejected CSRF token both surface as invalidSession.
     if "invalidSession" in descriptor or "Guest user access is not allowed" in exception_message:
@@ -177,7 +182,9 @@ def extract_return_value(parsed: dict[str, Any]) -> Any:
     if not actions:
         raise MyEnergyApiError(exception_message or "The portal returned no action result")
 
-    action = actions[0]
+    action = actions[0] if isinstance(actions, list) else None
+    if not isinstance(action, dict):
+        raise MyEnergyApiError("The portal returned an unexpected action result")
     if action.get("state") != "SUCCESS":
         errors = action.get("error") or []
         detail = errors[0].get("message") if errors and isinstance(errors[0], dict) else None
@@ -299,7 +306,19 @@ def _js_var(html: str, name: str) -> str | None:
 
 
 def parse_mfa_page(html: str) -> MfaPage:
-    """Read the remoting signatures, options and final form from MFA_Enabler."""
+    """Read the remoting signatures, options and final form from MFA_Enabler.
+
+    A page of an unexpected shape raises ``MyEnergyApiError`` (never a bare KeyError and the
+    like, which the config flow would show as "unknown error"). The message says nothing of the
+    page's content.
+    """
+    try:
+        return _parse_mfa_page(html)
+    except (KeyError, TypeError, ValueError, AttributeError, IndexError, StopIteration):
+        raise MyEnergyApiError("The verification page was not in the expected shape") from None
+
+
+def _parse_mfa_page(html: str) -> MfaPage:
     match = _PROVIDER_RE.search(html)
     if not match:
         raise MyEnergyApiError("The verification page did not include its remoting setup")

@@ -236,6 +236,10 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
       for an entry that is not loaded, so `async_reprice_entry` primes the zones itself.
       Last, the NMI (or a statistic id containing it) was logged by the statistics writer and the
       coordinator's failure logs; they now use the statistic's short label and a NMI-free site name.
+      Two Low findings: a tariff zone missing from the tz database (no `tzdata`) crashed the whole
+      sensor platform; it now skips only the tariff sensors with one warning. And an MFA page of an
+      unexpected shape raised a bare KeyError/TypeError, shown as "unknown"; the parsers now raise
+      `MyEnergyApiError` and the flow shows a new `portal_error` message.
 - [ ] Optional: post on the HA community forum (thread "Reading Australian
       smart meter data" has people asking for exactly this).
 

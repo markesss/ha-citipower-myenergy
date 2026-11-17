@@ -60,6 +60,7 @@ from .const import (
     MIN_KEEPALIVE_MINUTES,
 )
 from .exceptions import (
+    MyEnergyApiError,
     MyEnergyCannotConnect,
     MyEnergyError,
     MyEnergyInvalidAuth,
@@ -138,6 +139,10 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
             except MyEnergyCannotConnect as err:
                 _LOGGER.warning("Could not reach myEnergy: %s", err)
                 errors["base"] = "cannot_connect"
+            except MyEnergyApiError:
+                # A page or reply of a shape we do not know: the portal probably changed.
+                _LOGGER.exception("The myEnergy portal sent an unexpected reply at sign-in")
+                errors["base"] = "portal_error"
             except MyEnergyError:
                 _LOGGER.exception("Unexpected error signing in to myEnergy")
                 errors["base"] = "unknown"
@@ -214,6 +219,9 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
             except MyEnergyCannotConnect as err:
                 _LOGGER.warning("Could not reach myEnergy: %s", err)
                 errors["base"] = "cannot_connect"
+            except MyEnergyApiError:
+                _LOGGER.exception("The myEnergy portal sent an unexpected reply to the code")
+                errors["base"] = "portal_error"
             except MyEnergyError:
                 _LOGGER.exception("Unexpected error verifying the myEnergy code")
                 errors["base"] = "unknown"

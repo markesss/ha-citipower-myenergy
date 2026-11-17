@@ -683,3 +683,24 @@ async def test_a_failed_sign_in_hop_logs_neither_the_sid_nor_the_query(
     assert "Could not reach" in caplog.text
     for secret in ("SECRET123", "TOKEN456", "sid="):
         assert secret not in caplog.text
+
+
+async def test_an_unexpected_mfa_page_shows_the_portal_error_not_unknown(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, caplog
+) -> None:
+    """A page of a shape we do not know is reported as a portal problem, with no page content."""
+    from custom_components.citipower_myenergy.exceptions import MyEnergyApiError
+
+    page = (
+        "Visualforce.remoting.Manager.add(new $VFRM.RemotingProviderImpl("
+        '{"vf": {"vid": "SECRETVID"}, "actions": {"C": {"ms": [{"ver": 60}]}}}))'
+    )
+    with pytest.raises(MyEnergyApiError) as raised:
+        parse_mfa_page(page)
+    login = _login(async_submit_credentials=AsyncMock(side_effect=raised.value))
+    p1, p2, p3, p4 = _patches(login, _api())
+    with p1, p2, p3, p4:
+        result = await _credentials(hass, await _start(hass))
+    assert result["type"] is FlowResultType.FORM
+    assert result["errors"] == {"base": "portal_error"}
+    assert "SECRETVID" not in caplog.text
