@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from homeassistant.components.recorder import Recorder
+from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_UNAVAILABLE, STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
@@ -69,8 +70,8 @@ def portal() -> Iterator[None]:
     with (
         patch(f"{PACKAGE}.MyEnergyApi"),
         patch(f"{PACKAGE}.MyEnergyAuraClient"),
-        patch(f"{PACKAGE}.async_create_session", new=AsyncMock()),
-        patch(f"{PACKAGE}.SessionStore") as store,
+        patch(f"{PACKAGE}.async_create_session", new=AsyncMock(return_value=AsyncMock())),
+        patch(f"{PACKAGE}.get_session_store") as store,
         patch.object(
             MyEnergyCoordinator,
             "_async_update_data",
@@ -254,3 +255,36 @@ async def test_the_timeline_stops_cleanly(hass: HomeAssistant) -> None:
         remove = timeline.async_add_listener(lambda: None)
         remove()
     track.assert_not_called()
+
+
+async def test_a_zone_the_database_lacks_skips_only_the_tariff_sensors(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, portal, caplog
+) -> None:
+    """No tzdata: the platform still sets up, minus the sensors that need the zone."""
+    from zoneinfo import ZoneInfoNotFoundError
+
+    from custom_components.citipower_myenergy import tariff as tariff_module
+
+    stored = _glohome()
+    stored["versions"][0]["timezone"] = "Australia/Sydney"
+
+    def _missing(key):
+        raise ZoneInfoNotFoundError(key)
+
+    tariff_module.zone_for.cache_clear()
+    try:
+        with patch.object(tariff_module, "ZoneInfo", _missing):
+            entry = await _setup(hass, {"tariff": stored})
+            assert entry.state is ConfigEntryState.LOADED
+            assert _id(hass, "latest_data") is not None
+            assert _id(hass, "session") is not None
+            for key in ("tariff_period", "tariff_rate", "tariff_next_change"):
+                assert _id(hass, key) is None
+    finally:
+        tariff_module.zone_for.cache_clear()
+    assert "Skipping the tariff sensors" in caplog.text
+    assert "Australia/Sydney" in caplog.text
+    assert "install the 'tzdata' package" in caplog.text
+    for record in caplog.records:
+        if record.name.startswith("custom_components"):
+            assert NMI not in record.getMessage()

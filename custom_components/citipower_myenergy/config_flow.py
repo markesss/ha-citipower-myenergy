@@ -60,12 +60,14 @@ from .const import (
     MIN_KEEPALIVE_MINUTES,
 )
 from .exceptions import (
+    MyEnergyApiError,
     MyEnergyCannotConnect,
     MyEnergyError,
     MyEnergyInvalidAuth,
     MyEnergyInvalidCode,
 )
 from .models import NmiInfo
+from .tariff import prime_zones
 from .tariff_flow import TariffOptionsFlow
 from .tls import async_create_session
 
@@ -104,6 +106,18 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
         self._nmis: list[NmiInfo] = []
         self._code_error = ""
 
+    async def _async_close_login(self) -> None:
+        """Close the sign-in session, if there is one."""
+        if self._login is not None:
+            await self._login.session.close()
+            self._login = None
+
+    @callback
+    def async_remove(self) -> None:
+        """Close the sign-in session when the flow finishes, aborts or is dismissed."""
+        if self._login is not None:
+            self.hass.async_create_task(self._login.session.close())
+
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
@@ -114,6 +128,7 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
         """Collect the email and password."""
         errors: dict[str, str] = {}
         if user_input is not None:
+            await self._async_close_login()  # a retry must not leave the last session open
             self._login = MyEnergyLogin(await async_create_session(self.hass))
             try:
                 page = await self._login.async_submit_credentials(
@@ -124,6 +139,10 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
             except MyEnergyCannotConnect as err:
                 _LOGGER.warning("Could not reach myEnergy: %s", err)
                 errors["base"] = "cannot_connect"
+            except MyEnergyApiError:
+                # A page or reply of a shape we do not know: the portal probably changed.
+                _LOGGER.exception("The myEnergy portal sent an unexpected reply at sign-in")
+                errors["base"] = "portal_error"
             except MyEnergyError:
                 _LOGGER.exception("Unexpected error signing in to myEnergy")
                 errors["base"] = "unknown"
@@ -200,6 +219,9 @@ class MyEnergyConfigFlow(ConfigFlow, domain=DOMAIN):
             except MyEnergyCannotConnect as err:
                 _LOGGER.warning("Could not reach myEnergy: %s", err)
                 errors["base"] = "cannot_connect"
+            except MyEnergyApiError:
+                _LOGGER.exception("The myEnergy portal sent an unexpected reply to the code")
+                errors["base"] = "portal_error"
             except MyEnergyError:
                 _LOGGER.exception("Unexpected error verifying the myEnergy code")
                 errors["base"] = "unknown"
@@ -312,6 +334,8 @@ class MyEnergyOptionsFlow(TariffOptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         """Choose which options to change."""
+        # The tariff steps read zones; load them off the event loop first.
+        await self.hass.async_add_executor_job(prime_zones)
         return self.async_show_menu(step_id="init", menu_options=["keepalive", "tariff"])
 
     async def async_step_keepalive(

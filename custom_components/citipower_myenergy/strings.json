@@ -44,6 +44,7 @@
       "invalid_auth": "myEnergy did not accept that email address or password.",
       "cannot_connect": "Could not reach myEnergy. Try again shortly.",
       "unknown": "Something unexpected went wrong. The log has the details.",
+      "portal_error": "myEnergy sent a reply this integration does not understand; the portal may have changed. The log has the details.",
       "send_failed": "myEnergy could not send a code that way. Try the other option.",
       "code_resent": "A new code has been sent.",
       "code_required": "Enter the 6-digit code.",

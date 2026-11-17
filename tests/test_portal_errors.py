@@ -23,6 +23,7 @@ from custom_components.citipower_myenergy.portal import (
     extract_return_value,
     login_error,
     login_redirect,
+    parse_aura_body,
     parse_mfa_page,
     parse_remoting_result,
     unwrap_result,
@@ -291,3 +292,51 @@ def test_remoting_results_tolerate_a_bare_object_and_skip_junk_entries() -> None
     assert parse_remoting_result(["junk", {"result": {"a": 1}}], "m") == {"a": 1}
     # A call that returns nothing is an empty result, which the callers read as "not successful".
     assert parse_remoting_result([{"result": None}], "m") == {}
+
+
+# --- Malformed pages and replies raise MyEnergyApiError, never a bare KeyError and the like ---
+
+
+def _provider_page(provider: str) -> str:
+    return "Visualforce.remoting.Manager.add(new $VFRM.RemotingProviderImpl(" + provider + "))"
+
+
+@pytest.mark.parametrize(
+    "provider",
+    [
+        '{"vf": {"vid": "v"}, "actions": {"C": {"ms": [{"ver": 60}]}}}',  # method without a name
+        '{"vf": {"vid": "v"}, "actions": {"C": {"ms": ["not-a-dict"]}}}',  # wrong type
+        '{"vf": {"vid": "v"}, "actions": {"C": {"ms": [{"name": "m", "ver": "abc"}]}}}',
+        '{"vf": {"vid": "v"}, "actions": {"C": "not-a-dict"}}',
+        '{"vf": {"vid": "v"}, "actions": {"C": {"ms": 5}}}',
+        '{"vf": "oops", "actions": {"C": {"ms": []}}}',
+        '{"vf": {"vid": "v"}, "actions": []}',  # empty list
+        '["not", "an", "object"]',
+    ],
+)
+def test_a_malformed_mfa_page_is_a_portal_error(provider: str) -> None:
+    with pytest.raises(MyEnergyApiError) as raised:
+        parse_mfa_page(_provider_page(provider))
+    assert provider not in str(raised.value)  # nothing from the page is echoed
+
+
+@pytest.mark.parametrize("body", ["[1, 2]", '"text"', "7", "null"])
+def test_an_aura_reply_that_is_not_an_object_is_a_portal_error(body: str) -> None:
+    with pytest.raises(MyEnergyApiError):
+        parse_aura_body(body)
+
+
+@pytest.mark.parametrize(
+    "parsed",
+    [
+        {"event": "oops", "actions": [{"state": "SUCCESS"}]},
+        {"event": {"descriptor": 5}, "actions": ["not-a-dict"]},
+        {"actions": "nope"},
+        {"exceptionMessage": ["x"], "actions": []},
+    ],
+)
+def test_an_odd_aura_envelope_is_a_portal_error_or_a_value(parsed: dict) -> None:
+    try:
+        extract_return_value(parsed)
+    except MyEnergyApiError:
+        pass

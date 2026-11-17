@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
@@ -16,8 +18,11 @@ from .const import (
     CONF_SIGNED_IN_AT,
 )
 from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
-from .session_store import SessionStore
+from .session_store import get_session_store
+from .tariff import prime_zones
 from .tls import async_create_session
+
+_LOGGER = logging.getLogger(__name__)
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
@@ -29,7 +34,14 @@ def site_name(data: dict) -> str:
 
 async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> bool:
     """Set up myEnergy from a config entry."""
-    store = SessionStore(hass)
+    # Load every zone a tariff can use off the event loop; ZoneInfo reads the disk.
+    if missing := await hass.async_add_executor_job(prime_zones):
+        _LOGGER.warning(
+            "The time zone database lacks %s; a tariff on one of them will not be priced "
+            "(install the 'tzdata' package)",
+            ", ".join(missing),
+        )
+    store = get_session_store(hass)
     await store.async_load()
     signed_in_at = entry.data.get(CONF_SIGNED_IN_AT)
 
@@ -37,8 +49,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> 
         await store.async_save_session(entry.entry_id, signed_in_at, context, cookies)
 
     # A dedicated session keeps the portal's cookies out of the shared jar.
+    session = await async_create_session(hass)
+    # Close it on unload (and if setup fails), or every reload would leave one open.
+    entry.async_on_unload(session.close)
     client = MyEnergyAuraClient(
-        await async_create_session(hass),
+        session,
         store.cookies(entry.entry_id, signed_in_at) or entry.data[CONF_COOKIES],
         context=store.context(entry.entry_id, signed_in_at),
         on_change=_remember,
@@ -55,7 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> 
     await coordinator.async_config_entry_first_refresh()
 
     entry.runtime_data = coordinator
-    entry.async_on_unload(coordinator.async_stop_keepalive)
+    entry.async_on_unload(coordinator.async_halt_keepalive)
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
     coordinator.async_start_keepalive()
 
@@ -76,6 +91,6 @@ async def _async_reload_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -
 async def async_remove_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> None:
     """Forget the kept session, and any repair notice, when an entry is removed."""
     guard_for(hass, entry.data[CONF_NMI]).reset()
-    store = SessionStore(hass)
+    store = get_session_store(hass)
     await store.async_load()
     await store.async_forget(entry.entry_id)

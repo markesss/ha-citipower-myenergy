@@ -9,6 +9,7 @@ wakes them at each boundary.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import datetime, time, timedelta
 from typing import Any
@@ -23,6 +24,7 @@ from homeassistant.util import dt as dt_util
 from .const import MARKET_TZ
 from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
 from .entity import MyEnergyEntity, device_info
+from .exceptions import TariffError
 from .statistics import channel_label
 from .tariff import (
     KIND_IMPORT,
@@ -37,6 +39,8 @@ from .tariff import (
 # Every sensor reads data the coordinator (or the tariff timeline) already holds and makes no
 # request of its own, so there is nothing to limit.
 PARALLEL_UPDATES = 0
+
+_LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(
@@ -61,8 +65,15 @@ async def async_setup_entry(
             async_add_entities(new)
 
     tariff = coordinator.load_tariff()
+    timeline: TariffTimeline | None = None
     if tariff is not None:
-        timeline = TariffTimeline(hass, tariff)
+        try:
+            timeline = TariffTimeline(hass, tariff)
+        except TariffError as err:
+            # No time zone database for the tariff's zone (install the tzdata package). Only the
+            # tariff sensors depend on it, so the rest still load.
+            _LOGGER.warning("Skipping the tariff sensors for %s: %s", coordinator.log_name, err)
+    if tariff is not None and timeline is not None:
         entry.async_on_unload(timeline.async_stop)
         entities += [
             TariffPeriodSensor(coordinator, timeline),
@@ -252,7 +263,11 @@ class TariffTimeline:
         if self._stopped:
             return
         # The boundary itself, unless the timer ran late (the system slept).
-        self._refresh(max(self._boundary or dt_util.utcnow(), dt_util.utcnow()))
+        try:
+            self._refresh(max(self._boundary or dt_util.utcnow(), dt_util.utcnow()))
+        except TariffError as err:
+            _LOGGER.warning("The tariff sensors have stopped updating: %s", err)
+            return
         self._schedule()
         for listener in list(self._listeners):
             listener()

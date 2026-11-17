@@ -93,7 +93,7 @@ rules:
     comment: The Refresh data button raises HomeAssistantError when its poll fails; there are no actions.
   config-entry-unloading:
     status: done
-    comment: Platforms unload, and the keep-alive, update listener and sensor timers are cancelled through async_on_unload.
+    comment: Platforms unload, and through async_on_unload the update listener and sensor timers are cancelled, the keep-alive is halted for good (a ping already in flight neither reschedules, saves its session nor starts a reauth, tested) and the entry's HTTP session is closed (tested); the session store is one shared copy; removing an entry deletes only its stored session.
   docs-configuration-parameters:
     status: done
     comment: README sections on the keep-alive interval and the tariff options.
@@ -190,7 +190,7 @@ rules:
     comment: There is no external library; the code uses aiohttp asynchronously.
   inject-websession:
     status: exempt
-    comment: The portal omits its TLS intermediate certificate, so the integration builds its own session (tls.async_create_session) with the certificate bundled; Home Assistant's shared session fails verification. Judgement call.
+    comment: The portal omits its TLS intermediate certificate, so the integration builds its own session (tls.async_create_session) with the certificate bundled; Home Assistant's shared session fails verification. Because it owns the session, it closes it; the entry on unload, the config flow when it ends, and one shutdown listener for any left open (all tested). Judgement call.
   strict-typing:
     status: todo
     comment: A lenient mypy --strict run reports 22 errors in 7 files, and there is no mypy configuration or py.typed marker.

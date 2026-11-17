@@ -190,8 +190,56 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
 - [x] CI green (hassfest, HACS, ruff, pytest).
 - [ ] Update README with live-test results and anything learnt in Phases 3–5.
 - [x] Bump `version` in `manifest.json`; tag a `v0.1.0` release.
-      Now at v0.1.2 (v0.1.1 added the connection-error logging, v0.1.2 the TLS fix). Each
-      tag also needs a GitHub Release for HACS.
+      Was v0.1.2 (v0.1.1 added the connection-error logging, v0.1.2 the TLS fix); now v0.2.1,
+      below. Each tag also needs a GitHub Release for HACS (GitHub releases do not mirror from
+      Gitea, so they are created by hand).
+- [x] **0.2.0 released (16 Nov 2026).** The 0.2.0b1 to 0.2.0b10 work on
+      `feature/tariff-cost-tracking` was squash-merged into `main` by PR #2 (`60b2a70`), tagged
+      `v0.2.0` and released on GitHub (Latest). `main` now takes changes through pull requests
+      only. The `v0.2.0b*` tags still point at the old branch commits, which are not in `main`'s
+      history after the squash.
+- [x] **0.2.1 (CI only, 16 Nov 2026).** PR #3 removed `ignore: brands` from the HACS job (the
+      check passes on GitHub with the images in `brand/`), and PR #4 bumped the manifest to 0.2.1
+      (`368f7ca`, tag `v0.2.1`). The Validate run on `main` for that commit passed (hassfest, HACS
+      and ruff + pytest, with the coverage gate), and the GitHub release `v0.2.1` was created
+      after it, which is the order the HACS default store's PR template asks for.
+- [~] **HACS default store submission (16 Nov 2026).** `hacs/default` PR #14280, from
+      `markesss/default` branch `add-ha-citipower-myenergy`: one commit adding
+      `"markesss/ha-citipower-myenergy"` to the `integration` file (alphabetical, case-insensitive,
+      between `Marker284/ha-minecraft-realms` and `markfrancisonly/ha-cameralux`; the repo's own
+      `scripts/is_sorted.py` passes). The template's boxes are ticked and its links are the
+      `v0.2.1` release and the passing Validate run, which holds both the HACS and hassfest jobs.
+      Its lint checks passed and its Check workflow's jobs passed or were skipped. **Now waiting
+      on the HACS queue** (new additions take months; do not request reviews, which closes the
+      PR). If a bot drafts it, fix the point it names and press Ready for review. The commit
+      message carries a `Co-Authored-By` trailer for Claude. To check on the repo page: the topic
+      `smart-merge` looks like a typo for `smart-meter`, and `v0.2.0b8` and `v0.2.0b9` should be
+      marked Pre-release.
+      **Review findings (17 Nov 2026).** A HACS reviewer found one blocking and one minor
+      issue; both are fixed in 0.2.2 (branch `fix/hacs-review-event-loop`). Blocking:
+      `tariff.zone_for` built a `ZoneInfo` on the event loop, which reads the tz database from
+      disk on first use. `tariff.prime_zones()` now loads every allowed zone, and runs in an
+      executor at entry setup and at the start of the options flow, so `zone_for` is only ever a
+      cache hit on the loop. Minor: `tls.async_create_session` leaked a session per setup. The
+      entry now closes its session on unload, the config flow closes its session when the flow
+      ends (and before a password retry), and one shutdown listener covers any still open.
+      Also found and fixed in 0.2.2: `cannot_connect` embedded aiohttp's message, which carries
+      the request URL, so a failed `frontdoor.jsp` hop logged the live `sid`. It now builds its
+      text from the error type, HTTP status and the URL without its query, and callers
+      raise it `from None` so no chained traceback carries the URL.
+      An independent review then found four real Medium issues, fixed on the same branch:
+      an unload during a keep-alive ping left an orphan loop (now halted for good and checked
+      before it saves or starts reauth); the keep-alive never restarted after a session
+      recovered; every entry and helper held its own copy of the session file and overwrote the
+      others (now one shared store, same file and layout so no re-sign-in on upgrade); and
+      `quality_scale.yaml` now describes the unload behaviour as tested. The Repairs fix can run
+      for an entry that is not loaded, so `async_reprice_entry` primes the zones itself.
+      Last, the NMI (or a statistic id containing it) was logged by the statistics writer and the
+      coordinator's failure logs; they now use the statistic's short label and a NMI-free site name.
+      Two Low findings: a tariff zone missing from the tz database (no `tzdata`) crashed the whole
+      sensor platform; it now skips only the tariff sensors with one warning. And an MFA page of an
+      unexpected shape raised a bare KeyError/TypeError, shown as "unknown"; the parsers now raise
+      `MyEnergyApiError` and the flow shows a new `portal_error` message.
 - [ ] Optional: post on the HA community forum (thread "Reading Australian
       smart meter data" has people asking for exactly this).
 

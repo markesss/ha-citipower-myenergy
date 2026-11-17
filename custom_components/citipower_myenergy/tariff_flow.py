@@ -47,7 +47,7 @@ from .const import (
 from .exceptions import MyEnergyError, TariffError
 from .reprice import FAR_PAST as _FAR_PAST
 from .reprice import async_reprice_entry
-from .session_store import SessionStore
+from .session_store import get_session_store
 from .statistics import async_recalculate_costs, period_statistic_ids
 from .tariff import (
     DEFAULT_TIMEZONE,
@@ -132,7 +132,7 @@ class TariffOptionsFlow(OptionsFlow):
 
     async def _async_prepare(self) -> None:
         """Decide whether export prices make sense: only for an account that exports."""
-        store = SessionStore(self.hass)
+        store = get_session_store(self.hass)
         await store.async_load()
         suffixes = store.suffixes(self.config_entry.entry_id)
         stored = self._stored_tariff()

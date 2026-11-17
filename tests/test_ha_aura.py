@@ -211,7 +211,7 @@ async def test_an_http_redirect_loop_means_the_session_has_ended(serve, session)
 @pytest.mark.parametrize(
     ("error", "message"),
     [
-        (aiohttp.ClientConnectionError("connection refused"), "connection refused"),
+        (aiohttp.ClientConnectionError("connection refused"), "ClientConnectionError"),
         (TimeoutError(), "the request timed out"),
     ],
 )
@@ -377,7 +377,7 @@ async def test_aura_failures_map_onto_the_exception_hierarchy(
 @pytest.mark.parametrize(
     ("error", "message"),
     [
-        (aiohttp.ServerDisconnectedError(), "Server disconnected"),
+        (aiohttp.ServerDisconnectedError(), "ServerDisconnectedError"),
         (TimeoutError(), "timed out"),
     ],
 )

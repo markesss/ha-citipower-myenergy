@@ -1632,3 +1632,26 @@ async def test_a_recorder_that_never_settles_cannot_stall_a_write_forever(
     monkeypatch.setattr(get_instance(hass), "async_block_till_done", _hang)
     async with asyncio.timeout(15):
         await async_insert_channel(hass, NMI, "Home", _channel([1.0] * 48))
+
+
+async def test_rewrites_log_the_short_label_never_the_nmi(
+    recorder_mock: Recorder, hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A kWh rewrite and a cost rewrite name the statistic by its label, at every log level."""
+    caplog.set_level("DEBUG")
+    await async_insert_channel(hass, NMI, "Home", _channel([1.0, 2.0, 3.0]))
+    await async_insert_cost(hass, NMI, "Home", _channel([1.0] * 48), _glohome())
+    await async_wait_recording_done(hass)
+    values = [1.0] * 48
+    values[12] = 3.0
+    await async_insert_channel(hass, NMI, "Home", _channel([1.0, 5.0, 3.0]))
+    await async_insert_cost(hass, NMI, "Home", _channel(values), _glohome())
+    await async_wait_recording_done(hass)
+
+    assert "Rewriting" in caplog.text and "Adding" in caplog.text  # the paths really ran
+    # The recorder's own SQL debug lines carry ids; only this integration's logs are ours.
+    for record in (r for r in caplog.records if r.name.startswith("custom_components")):
+        text = record.getMessage() + (record.exc_text or "")
+        assert NMI not in text
+        assert statistic_id_for(NMI, "E1") not in text
+        assert cost_statistic_id_for(NMI, "E1") not in text

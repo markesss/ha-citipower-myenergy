@@ -7,6 +7,7 @@ statistics and the keep-alive really is driven by Home Assistant's clock.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import date, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock
@@ -336,3 +337,107 @@ async def test_stopping_the_keepalive_cancels_the_timer(
 
     await _advance(hass, freezer, timedelta(hours=3))
     coordinator.api.async_account_info.assert_not_awaited()
+
+
+@pytest.mark.parametrize("outcome", ["ok", "ended", "blip"])
+async def test_halting_during_a_ping_leaves_nothing_running(
+    recorder_mock: Recorder, hass: HomeAssistant, freezer, outcome: str
+) -> None:
+    """An unload while the ping is in flight must not reschedule, save or start a reauth."""
+    freezer.move_to("2026-11-16T00:00:00+00:00")
+    coordinator = _coordinator(hass)
+    gate = asyncio.Event()
+
+    async def _slow(_nmi):
+        await gate.wait()
+        if outcome == "ended":
+            raise MyEnergyAuthError("session ended")
+        if outcome == "blip":
+            raise MyEnergyError("a blip")
+        return MagicMock()
+
+    coordinator.api.async_account_info = AsyncMock(side_effect=_slow)
+    coordinator.async_start_keepalive()
+    freezer.tick(KEEPALIVE + timedelta(seconds=1))
+    async_fire_time_changed(hass)
+    await asyncio.sleep(0)  # the ping is now waiting on the gate
+    assert coordinator.api.async_account_info.await_count == 1
+
+    coordinator.async_halt_keepalive()
+    gate.set()
+    await hass.async_block_till_done()
+
+    assert coordinator._cancel_keepalive is None
+    coordinator._store.async_save_session.assert_not_awaited()
+    assert not hass.config_entries.flow.async_progress_by_handler(DOMAIN)
+    await _advance(hass, freezer, timedelta(hours=3))
+    assert coordinator.api.async_account_info.await_count == 1
+
+
+async def test_a_halted_keepalive_cannot_be_started_again(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    coordinator = _coordinator(hass)
+    coordinator.async_halt_keepalive()
+    coordinator.async_start_keepalive()
+    assert coordinator._cancel_keepalive is None
+
+
+async def test_a_recovered_session_restarts_the_keepalive(
+    recorder_mock: Recorder, hass: HomeAssistant, freezer
+) -> None:
+    freezer.move_to("2026-11-16T00:00:00+00:00")
+    coordinator = _coordinator(hass)
+    coordinator.async_start_keepalive()
+    coordinator.api.async_account_info.side_effect = MyEnergyAuthError("401")
+    with pytest.raises(ConfigEntryAuthFailed):
+        await coordinator._async_update_data()
+    assert coordinator.session_dead and coordinator._cancel_keepalive is None
+
+    coordinator.api.async_account_info.side_effect = None
+    await coordinator._async_update_data()
+    assert not coordinator.session_dead
+    assert coordinator._cancel_keepalive is not None  # pinging again
+
+    await _advance(hass, freezer, KEEPALIVE + timedelta(seconds=1))
+    assert coordinator.last_keepalive is not None
+
+
+async def test_a_recovery_after_unload_does_not_restart_the_keepalive(
+    recorder_mock: Recorder, hass: HomeAssistant
+) -> None:
+    coordinator = _coordinator(hass)
+    coordinator._mark_dead()
+    coordinator.async_halt_keepalive()
+    coordinator._touched()
+    assert coordinator._cancel_keepalive is None
+
+
+@pytest.mark.parametrize("name", ["Home", NMI], ids=["named", "named-by-nmi"])
+async def test_a_failed_cost_write_logs_no_nmi(
+    recorder_mock: Recorder, hass: HomeAssistant, caplog: pytest.LogCaptureFixture, name: str
+) -> None:
+    """Unexpected and pricing failures name the site (or 'this meter'), never the NMI."""
+    from unittest.mock import patch
+
+    from custom_components.citipower_myenergy.exceptions import TariffError
+    from custom_components.citipower_myenergy.tariff import flat_tariff
+
+    caplog.set_level("DEBUG")
+    coordinator = _coordinator(hass)
+    coordinator.site_name = name
+    channel = _channel("E1", START, 2)
+    tariff = flat_tariff(30.0, effective_from=date(2026, 1, 1))
+    target = "custom_components.citipower_myenergy.coordinator.async_insert_cost"
+    for error in (RuntimeError("boom"), TariffError("bad price")):
+        with patch(target, AsyncMock(side_effect=error)):
+            await coordinator._async_insert_cost(channel, tariff)
+    period = "custom_components.citipower_myenergy.coordinator.async_insert_period_statistics"
+    for error in (RuntimeError("boom"), TariffError("bad price")):
+        with patch(period, AsyncMock(side_effect=error)):
+            await coordinator._async_insert_period_statistics(channel, tariff)
+
+    assert "Unexpected error recording" in caplog.text
+    assert len(caplog.records) >= 4
+    for record in caplog.records:
+        assert NMI not in record.getMessage() + (record.exc_text or "")
