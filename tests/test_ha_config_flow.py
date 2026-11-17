@@ -50,6 +50,16 @@ SIGNED_IN = SignedIn(
 )
 
 
+@pytest.fixture(autouse=True)
+def _no_real_session():
+    """The login is mocked, so nothing may open (and then leak) a real HTTP session."""
+    with patch(
+        "custom_components.citipower_myenergy.config_flow.async_create_session",
+        new=AsyncMock(return_value=MagicMock(close=AsyncMock())),
+    ):
+        yield
+
+
 def _login(**kwargs) -> MagicMock:
     login = MagicMock()
     login.mfa_page = parse_mfa_page(MFA_HTML)
@@ -58,6 +68,7 @@ def _login(**kwargs) -> MagicMock:
     login.async_send_code = AsyncMock()
     login.async_verify_code = AsyncMock(return_value=SIGNED_IN)
     login.async_finish = AsyncMock(return_value=SIGNED_IN)
+    login.session.close = AsyncMock()
     for key, value in kwargs.items():
         setattr(login, key, value)
     return login
@@ -612,3 +623,33 @@ async def test_options_keepalive_default_when_unset(
     )
     key = next(k for k in result["data_schema"].schema if k == CONF_KEEPALIVE_MINUTES)
     assert key.default() == 45
+
+
+async def test_the_sign_in_session_is_closed_when_the_flow_finishes(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration
+) -> None:
+    login = _login()
+    p1, p2, p3, p4 = _patches(login, _api())
+    with p1, p2, p3, p4:
+        result = await _sign_in(hass, await _start(hass))
+        await hass.async_block_till_done()
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    login.session.close.assert_awaited()
+
+
+async def test_a_retried_password_closes_the_previous_session(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration
+) -> None:
+    login = _login(
+        async_submit_credentials=AsyncMock(side_effect=[MyEnergyInvalidAuth("no"), _mfa_page()])
+    )
+    p1, p2, p3, p4 = _patches(login, _api())
+    with p1, p2, p3, p4:
+        flow_id = await _start(hass)
+        await _credentials(hass, flow_id)
+        assert login.session.close.await_count == 0  # the failed login is still the flow's
+        await _credentials(hass, flow_id)
+        assert login.session.close.await_count == 1
+        hass.config_entries.flow.async_abort(flow_id)
+        await hass.async_block_till_done()
+    assert login.session.close.await_count == 2

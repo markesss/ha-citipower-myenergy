@@ -17,6 +17,7 @@ from .const import (
 )
 from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
 from .session_store import SessionStore
+from .tariff import prime_zones
 from .tls import async_create_session
 
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
@@ -29,6 +30,8 @@ def site_name(data: dict) -> str:
 
 async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> bool:
     """Set up myEnergy from a config entry."""
+    # Load every zone a tariff can use off the event loop; ZoneInfo reads the disk.
+    await hass.async_add_executor_job(prime_zones)
     store = SessionStore(hass)
     await store.async_load()
     signed_in_at = entry.data.get(CONF_SIGNED_IN_AT)
@@ -37,8 +40,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> 
         await store.async_save_session(entry.entry_id, signed_in_at, context, cookies)
 
     # A dedicated session keeps the portal's cookies out of the shared jar.
+    session = await async_create_session(hass)
+    # Close it on unload (and if setup fails), or every reload would leave one open.
+    entry.async_on_unload(session.close)
     client = MyEnergyAuraClient(
-        await async_create_session(hass),
+        session,
         store.cookies(entry.entry_id, signed_in_at) or entry.data[CONF_COOKIES],
         context=store.context(entry.entry_id, signed_in_at),
         on_change=_remember,

@@ -158,7 +158,7 @@ def client() -> Iterator[MagicMock]:
     with (
         patch(f"{PACKAGE}.MyEnergyApi") as api_class,
         patch(f"{PACKAGE}.MyEnergyAuraClient") as client_class,
-        patch(f"{PACKAGE}.async_create_session", new=AsyncMock()),
+        patch(f"{PACKAGE}.async_create_session", new=AsyncMock(return_value=AsyncMock())),
         patch(f"{PACKAGE}.coordinator.MyEnergyCoordinator.async_start_keepalive"),
     ):
         api = api_class.return_value

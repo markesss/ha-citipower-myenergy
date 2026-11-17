@@ -11,6 +11,7 @@ store. Verification stays on: the chain must still end at a trusted root.
 from __future__ import annotations
 
 import ssl
+import weakref
 from pathlib import Path
 
 import aiohttp
@@ -25,6 +26,7 @@ INTERMEDIATE_PEM = (
 )
 
 _CONNECTOR_KEY = "citipower_myenergy_connector"
+_SESSIONS_KEY = "citipower_myenergy_sessions"
 
 
 def build_ssl_context() -> ssl.SSLContext:
@@ -38,7 +40,9 @@ async def async_create_session(hass: HomeAssistant) -> aiohttp.ClientSession:
     """Create a session with its own cookie jar and the extended trust store.
 
     The connector (and so the SSL context) is shared across sessions; each
-    session still has a separate cookie jar.
+    session still has a separate cookie jar. Callers close their session when
+    they are done (entry unload, end of the config flow). One shutdown listener
+    closes any still open, so reloads do not pile up listeners or sessions.
     """
     connector = hass.data.get(_CONNECTOR_KEY)
     if connector is None or connector.closed:
@@ -46,15 +50,17 @@ async def async_create_session(hass: HomeAssistant) -> aiohttp.ClientSession:
         connector = aiohttp.TCPConnector(ssl=context)
         hass.data[_CONNECTOR_KEY] = connector
 
-        async def _close_connector(_event) -> None:
-            await connector.close()
+    open_sessions: weakref.WeakSet[aiohttp.ClientSession] | None = hass.data.get(_SESSIONS_KEY)
+    if open_sessions is None:
+        open_sessions = hass.data[_SESSIONS_KEY] = weakref.WeakSet()
 
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_CLOSE, _close_connector)
+        async def _close_all(_event) -> None:
+            for open_session in list(open_sessions):
+                await open_session.close()
+            await hass.data[_CONNECTOR_KEY].close()
+
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_CLOSE, _close_all)
 
     session = aiohttp.ClientSession(connector=connector, connector_owner=False)
-
-    async def _close_session(_event) -> None:
-        await session.close()
-
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_CLOSE, _close_session)
+    open_sessions.add(session)
     return session

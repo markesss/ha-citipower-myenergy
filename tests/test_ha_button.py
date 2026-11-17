@@ -40,7 +40,7 @@ def poll() -> Iterator[AsyncMock]:
     with (
         patch(f"{PACKAGE}.MyEnergyApi"),
         patch(f"{PACKAGE}.MyEnergyAuraClient"),
-        patch(f"{PACKAGE}.async_create_session", new=AsyncMock()),
+        patch(f"{PACKAGE}.async_create_session", new=AsyncMock(return_value=AsyncMock())),
         patch(f"{PACKAGE}.SessionStore") as store,
         patch.object(MyEnergyCoordinator, "_async_update_data", update),
         patch.object(MyEnergyCoordinator, "async_start_keepalive"),
@@ -61,7 +61,7 @@ def portal() -> Iterator[MagicMock]:
     with (
         patch(f"{PACKAGE}.MyEnergyApi") as api_class,
         patch(f"{PACKAGE}.MyEnergyAuraClient"),
-        patch(f"{PACKAGE}.async_create_session", new=AsyncMock()),
+        patch(f"{PACKAGE}.async_create_session", new=AsyncMock(return_value=AsyncMock())),
         patch(f"{PACKAGE}.SessionStore") as store,
         patch.object(MyEnergyCoordinator, "async_start_keepalive"),
     ):

@@ -69,7 +69,7 @@ def portal() -> Iterator[None]:
     with (
         patch(f"{PACKAGE}.MyEnergyApi"),
         patch(f"{PACKAGE}.MyEnergyAuraClient"),
-        patch(f"{PACKAGE}.async_create_session", new=AsyncMock()),
+        patch(f"{PACKAGE}.async_create_session", new=AsyncMock(return_value=AsyncMock())),
         patch(f"{PACKAGE}.SessionStore") as store,
         patch.object(
             MyEnergyCoordinator,
