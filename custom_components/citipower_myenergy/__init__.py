@@ -16,7 +16,7 @@ from .const import (
     CONF_SIGNED_IN_AT,
 )
 from .coordinator import MyEnergyConfigEntry, MyEnergyCoordinator
-from .session_store import SessionStore
+from .session_store import get_session_store
 from .tariff import prime_zones
 from .tls import async_create_session
 
@@ -32,7 +32,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> 
     """Set up myEnergy from a config entry."""
     # Load every zone a tariff can use off the event loop; ZoneInfo reads the disk.
     await hass.async_add_executor_job(prime_zones)
-    store = SessionStore(hass)
+    store = get_session_store(hass)
     await store.async_load()
     signed_in_at = entry.data.get(CONF_SIGNED_IN_AT)
 
@@ -82,6 +82,6 @@ async def _async_reload_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -
 async def async_remove_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> None:
     """Forget the kept session, and any repair notice, when an entry is removed."""
     guard_for(hass, entry.data[CONF_NMI]).reset()
-    store = SessionStore(hass)
+    store = get_session_store(hass)
     await store.async_load()
     await store.async_forget(entry.entry_id)

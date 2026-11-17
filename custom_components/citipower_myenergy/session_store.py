@@ -20,18 +20,37 @@ from homeassistant.helpers.storage import Store
 from .const import SESSION_STORAGE_KEY, STORAGE_VERSION
 from .portal import AuraContext
 
+_STORE_KEY = "citipower_myenergy_session_store"
+
+
+def get_session_store(hass: HomeAssistant) -> SessionStore:
+    """Return the one store every entry and helper shares.
+
+    The file holds every entry's record, and each store writes its whole in-memory copy. Separate
+    copies would overwrite each other's newer cookies and bring a removed entry's session back,
+    so there is exactly one copy per Home Assistant instance. The file and its layout are
+    unchanged, which is why an upgrade keeps existing sessions with no migration.
+    """
+    store = hass.data.get(_STORE_KEY)
+    if store is None:
+        store = hass.data[_STORE_KEY] = SessionStore(hass)
+    return store
+
 
 class SessionStore:
     """Persist cookies, Aura context and known channels per config entry."""
 
     def __init__(self, hass: HomeAssistant) -> None:
-        """Create the store."""
+        """Create the store; use ``get_session_store`` to share one."""
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, SESSION_STORAGE_KEY)
         self._data: dict[str, Any] = {}
+        self._loaded = False
 
     async def async_load(self) -> None:
-        """Read the store from disk."""
-        self._data = await self._store.async_load() or {}
+        """Read the store from disk, once (a later call must not discard newer records)."""
+        if not self._loaded:
+            self._data = await self._store.async_load() or {}
+            self._loaded = True
 
     def _record(self, entry_id: str, signed_in_at: str | None) -> dict[str, Any]:
         record = self._data.get(entry_id) or {}

@@ -15,7 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import CONF_ADDRESS, CONF_DESCRIPTION, CONF_NMI, CONF_PERIOD_STATS
-from .session_store import SessionStore
+from .session_store import get_session_store
 from .statistics import async_recalculate_costs
 from .tariff import Tariff, supply_mode_of
 
@@ -42,7 +42,7 @@ async def async_reprice_entry(
     """
     data = entry.data
     name = data.get(CONF_DESCRIPTION) or data.get(CONF_ADDRESS) or data[CONF_NMI]
-    store = SessionStore(hass)
+    store = get_session_store(hass)
     await store.async_load()
     suffixes = store.suffixes(entry.entry_id) or ["E1"]
     if period_statistics is None:

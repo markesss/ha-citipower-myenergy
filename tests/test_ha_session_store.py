@@ -27,7 +27,7 @@ from custom_components.citipower_myenergy.const import (
 from custom_components.citipower_myenergy.models import AccountInfo
 from custom_components.citipower_myenergy.nem12 import Channel
 from custom_components.citipower_myenergy.portal import AuraContext
-from custom_components.citipower_myenergy.session_store import SessionStore
+from custom_components.citipower_myenergy.session_store import SessionStore, get_session_store
 
 NMI = "6001234567"
 PACKAGE = "custom_components.citipower_myenergy"
@@ -281,7 +281,7 @@ async def test_removing_the_entry_forgets_its_session(
     other = MockConfigEntry(domain=DOMAIN, unique_id="other", data={"nmi": "other"})
     assert await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
-    store = SessionStore(hass)
+    store = get_session_store(hass)
     await store.async_load()
     await store.async_save_session(other.entry_id, SIGNED_IN, CONTEXT, COOKIES)
 
@@ -291,3 +291,85 @@ async def test_removing_the_entry_forgets_its_session(
     kept = hass_storage[SESSION_STORAGE_KEY]["data"]
     assert entry.entry_id not in kept
     assert other.entry_id in kept
+
+
+# --- One shared copy ---------------------------------------------------------------------
+
+
+async def test_every_caller_gets_the_same_store(hass: HomeAssistant) -> None:
+    assert get_session_store(hass) is get_session_store(hass)
+
+
+async def test_two_entries_do_not_overwrite_each_other(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """The setup of entry B and a helper of entry A used to each save a stale whole-file copy."""
+    first, second = get_session_store(hass), get_session_store(hass)
+    await first.async_load()
+    await second.async_load()
+    await first.async_save_session("entry-a", SIGNED_IN, CONTEXT, {"sid": "a-old"})
+    await second.async_save_session("entry-b", SIGNED_IN, CONTEXT, {"sid": "b"})
+    await first.async_save_session("entry-a", SIGNED_IN, CONTEXT, {"sid": "a-new"})
+    await second.async_save_suffixes("entry-b", ["E1"])
+
+    saved = hass_storage[SESSION_STORAGE_KEY]["data"]
+    assert saved["entry-a"]["cookies"] == {"sid": "a-new"}
+    assert saved["entry-b"]["cookies"] == {"sid": "b"}
+    assert saved["entry-b"]["suffixes"] == ["E1"]
+
+
+async def test_a_second_load_does_not_discard_newer_records(hass: HomeAssistant) -> None:
+    store = get_session_store(hass)
+    await store.async_load()
+    await store.async_save_session("entry-a", SIGNED_IN, CONTEXT, COOKIES)
+    await get_session_store(hass).async_load()  # what reprice and the options flow do
+    assert store.cookies("entry-a", SIGNED_IN) == COOKIES
+
+
+async def test_removal_while_another_entry_is_loaded_removes_only_its_session(
+    recorder_mock: Recorder, hass: HomeAssistant, custom_integration, client, hass_storage
+) -> None:
+    first = _entry(hass, signed_in_at=SIGNED_IN)
+    second = MockConfigEntry(
+        domain=DOMAIN,
+        unique_id="6009999999",
+        data={"nmi": "6009999999", "cookies": ENTRY_COOKIES, "signed_in_at": SIGNED_IN},
+    )
+    second.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(first.entry_id)
+    await hass.async_block_till_done()
+    assert second.state is ConfigEntryState.LOADED
+    # The loaded entry saves its own session again after the other was removed.
+    await hass.config_entries.async_remove(first.entry_id)
+    await hass.async_block_till_done()
+    await get_session_store(hass).async_save_session(
+        second.entry_id, SIGNED_IN, CONTEXT, {"sid": "second-newer"}
+    )
+
+    kept = hass_storage[SESSION_STORAGE_KEY]["data"]
+    assert first.entry_id not in kept
+    assert kept[second.entry_id]["cookies"] == {"sid": "second-newer"}
+
+
+async def test_a_file_written_by_0_2_1_is_still_read(
+    hass: HomeAssistant, hass_storage: dict
+) -> None:
+    """The file name and layout are unchanged, so upgrading keeps the session (no new MFA)."""
+    hass_storage[SESSION_STORAGE_KEY] = {
+        "version": STORAGE_VERSION,
+        "minor_version": 1,
+        "key": SESSION_STORAGE_KEY,
+        "data": {
+            "entry-1": {
+                "signed_in_at": SIGNED_IN,
+                "cookies": COOKIES,
+                "context": CONTEXT.as_dict(),
+                "suffixes": ["E1"],
+            }
+        },
+    }
+    store = get_session_store(hass)
+    await store.async_load()
+    assert store.cookies("entry-1", SIGNED_IN) == COOKIES
+    assert store.context("entry-1", SIGNED_IN) == CONTEXT
+    assert store.suffixes("entry-1") == ["E1"]
