@@ -97,3 +97,27 @@ async def test_shutdown_closes_open_sessions_with_one_listener(hass: HomeAssista
     hass.bus.async_fire(EVENT_HOMEASSISTANT_CLOSE)
     await hass.async_block_till_done()
     assert all(s.closed for s in sessions)
+
+
+async def test_repricing_primes_the_zones_even_when_the_entry_is_not_loaded(
+    hass: HomeAssistant,
+) -> None:
+    """The Repairs fix can run for an entry that never set up, so setup's priming is not enough."""
+    from custom_components.citipower_myenergy.reprice import FAR_PAST, async_reprice_entry
+    from custom_components.citipower_myenergy.tariff import flat_tariff
+
+    entry = _entry(hass)
+    store = MagicMock(suffixes=MagicMock(return_value=["E1"]), async_load=AsyncMock())
+    tariff_module.zone_for.cache_clear()
+    with patch(f"{PACKAGE}.reprice.get_session_store", return_value=store):
+        await async_reprice_entry(
+            hass,
+            entry,
+            flat_tariff(30.0, effective_from=FAR_PAST),
+            FAR_PAST,
+            recalculate=AsyncMock(return_value=0),
+        )
+    misses = tariff_module.zone_for.cache_info().misses
+    for name in tariff_module.ALLOWED_TIMEZONES:
+        tariff_module.zone_for(name)
+    assert tariff_module.zone_for.cache_info().misses == misses

@@ -227,6 +227,13 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
       the request URL, so a failed `frontdoor.jsp` hop logged the live `sid`. It now builds its
       text from the error type, HTTP status and the URL without its query, and callers
       raise it `from None` so no chained traceback carries the URL.
+      An independent review then found four real Medium issues, fixed on the same branch:
+      an unload during a keep-alive ping left an orphan loop (now halted for good and checked
+      before it saves or starts reauth); the keep-alive never restarted after a session
+      recovered; every entry and helper held its own copy of the session file and overwrote the
+      others (now one shared store, same file and layout so no re-sign-in on upgrade); and
+      `quality_scale.yaml` now describes the unload behaviour as tested. The Repairs fix can run
+      for an entry that is not loaded, so `async_reprice_entry` primes the zones itself.
 - [ ] Optional: post on the HA community forum (thread "Reading Australian
       smart meter data" has people asking for exactly this).
 
