@@ -79,7 +79,7 @@ flowchart TD
         s4["start keep-alive"]
         s1 --> s2 --> s3 --> s4
     end
-    subgraph poll["Every 4 h: _async_update_data"]
+    subgraph poll["Catch-up window (schedule.py): _async_update_data"]
         p1["retrieveAccountHolderInfo(nmi)<br/>→ start/end dates, company"]
         p2["start = earliest (≤ 2 y, ≥ account.start) if any channel has no statistics<br/>else newest stored hour − 7 days"]
         p3["getMeterData in ≤ 90-day chunks<br/>→ NEM12 → channels (E1, B1, …)"]
@@ -112,6 +112,10 @@ flowchart TD
   with the running sum recomputed from the hour before. This fixes estimates
   that are later replaced by actual readings.
 - Hours that haven't finished yet are never written.
+- **Poll timing.** `schedule.py` (pure) sets the delay to the next poll after every poll: daily window
+  from 02:30 local for 6 hours, 10-minute retries until yesterday's readings are in, then sleep
+  until tomorrow's window; failures back off 30 min to 2 h but never past the next window.
+  `_yesterday_complete` reads the newest day any channel holds, in market time.
 - **One writer at a time.** The poll and the options-flow recalculation both rewrite cost and
   per-period statistics, each chaining its first row from the stored total before it.
   `chain_guard.py` holds one `ChainGuard` per NMI (in `hass.data`, found with `guard_for`):

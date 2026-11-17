@@ -64,8 +64,9 @@ MAX_HISTORY_DAYS = 2 * 366
 # are later replaced with actuals are corrected in the statistics.
 REFRESH_WINDOW_DAYS = 7
 
-# Readings land the morning after (about 01:00 AEST), so a few polls a day is
-# plenty.
+# Only the interval a coordinator starts with, before its first poll. After that each poll sets
+# the delay to the next one from the catch-up window in ``schedule.py``: readings land the
+# morning after (about 01:00 AEST) but at no published time.
 UPDATE_INTERVAL = timedelta(hours=4)
 
 # --- Session ------------------------------------------------------------------
