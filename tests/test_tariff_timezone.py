@@ -420,3 +420,30 @@ def test_flat_tariff_accepts_a_zone() -> None:
     tariff = flat_tariff(25.0, effective_from=D0, timezone="Australia/Sydney")
     assert tariff.versions[0].timezone == "Australia/Sydney"
     assert tariff.to_dict()["versions"][0]["timezone"] == "Australia/Sydney"
+
+
+def test_prime_zones_fills_the_cache_for_every_allowed_zone() -> None:
+    """After priming, ``zone_for`` is a cache hit, so it never reads the database on the loop."""
+    from custom_components.citipower_myenergy.tariff import prime_zones, zone_for
+
+    zone_for.cache_clear()
+    prime_zones()
+    assert zone_for.cache_info().currsize >= len(ALLOWED_TIMEZONES)
+    misses = zone_for.cache_info().misses
+    for name in ALLOWED_TIMEZONES:
+        zone_for(name)
+    assert zone_for.cache_info().misses == misses
+
+
+def test_prime_zones_skips_a_zone_the_database_lacks(monkeypatch) -> None:
+    from custom_components.citipower_myenergy import tariff as tariff_module
+
+    def _no_database(key):
+        raise ZoneInfoNotFoundError(key)
+
+    tariff_module.zone_for.cache_clear()
+    monkeypatch.setattr(tariff_module, "ZoneInfo", _no_database)
+    tariff_module.prime_zones()  # must not raise; zone_for raises when a tariff needs the zone
+    with pytest.raises(TariffError):
+        tariff_module.zone_for("Australia/Sydney")
+    tariff_module.zone_for.cache_clear()

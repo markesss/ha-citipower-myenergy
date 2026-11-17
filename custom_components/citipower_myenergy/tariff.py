@@ -112,6 +112,21 @@ def zone_for(name: str | None) -> tzinfo:
         ) from err
 
 
+def prime_zones() -> None:
+    """Load every allowed zone into ``zone_for``'s cache.
+
+    ``ZoneInfo`` reads the tz database from disk on first use, which Home Assistant forbids on
+    the event loop. Run this in an executor before the tariff is first used; afterwards
+    ``zone_for`` is a cache hit. A zone the database lacks is skipped here and raises
+    ``TariffError`` from ``zone_for`` when a tariff actually needs it.
+    """
+    for name in ALLOWED_TIMEZONES:
+        try:
+            zone_for(name)
+        except TariffError:
+            continue
+
+
 KIND_IMPORT = "import"
 KIND_EXPORT = "export"
 Kind = Literal["import", "export"]
@@ -909,5 +924,6 @@ __all__ = [
     "period_slug",
     "period_slugs",
     "supply_mode_of",
+    "prime_zones",
     "zone_for",
 ]
