@@ -112,19 +112,22 @@ def zone_for(name: str | None) -> tzinfo:
         ) from err
 
 
-def prime_zones() -> None:
+def prime_zones() -> list[str]:
     """Load every allowed zone into ``zone_for``'s cache.
 
     ``ZoneInfo`` reads the tz database from disk on first use, which Home Assistant forbids on
     the event loop. Run this in an executor before the tariff is first used; afterwards
     ``zone_for`` is a cache hit. A zone the database lacks is skipped here and raises
-    ``TariffError`` from ``zone_for`` when a tariff actually needs it.
+    ``TariffError`` from ``zone_for`` when a tariff actually needs it. Returns the names it
+    could not load, so the caller can say so once.
     """
+    missing: list[str] = []
     for name in ALLOWED_TIMEZONES:
         try:
             zone_for(name)
         except TariffError:
-            continue
+            missing.append(name)
+    return missing
 
 
 KIND_IMPORT = "import"

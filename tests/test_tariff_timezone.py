@@ -443,7 +443,8 @@ def test_prime_zones_skips_a_zone_the_database_lacks(monkeypatch) -> None:
 
     tariff_module.zone_for.cache_clear()
     monkeypatch.setattr(tariff_module, "ZoneInfo", _no_database)
-    tariff_module.prime_zones()  # must not raise; zone_for raises when a tariff needs the zone
+    # Must not raise; zone_for raises when a tariff needs the zone. It reports what is missing.
+    assert tariff_module.prime_zones() == list(ALLOWED_TIMEZONES[:-1])  # GMT needs no database
     with pytest.raises(TariffError):
         tariff_module.zone_for("Australia/Sydney")
     tariff_module.zone_for.cache_clear()

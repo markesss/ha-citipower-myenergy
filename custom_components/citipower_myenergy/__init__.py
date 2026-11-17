@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 
@@ -20,6 +22,8 @@ from .session_store import get_session_store
 from .tariff import prime_zones
 from .tls import async_create_session
 
+_LOGGER = logging.getLogger(__name__)
+
 PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.BUTTON]
 
 
@@ -31,7 +35,12 @@ def site_name(data: dict) -> str:
 async def async_setup_entry(hass: HomeAssistant, entry: MyEnergyConfigEntry) -> bool:
     """Set up myEnergy from a config entry."""
     # Load every zone a tariff can use off the event loop; ZoneInfo reads the disk.
-    await hass.async_add_executor_job(prime_zones)
+    if missing := await hass.async_add_executor_job(prime_zones):
+        _LOGGER.warning(
+            "The time zone database lacks %s; a tariff on one of them will not be priced "
+            "(install the 'tzdata' package)",
+            ", ".join(missing),
+        )
     store = get_session_store(hass)
     await store.async_load()
     signed_in_at = entry.data.get(CONF_SIGNED_IN_AT)
