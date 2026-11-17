@@ -215,6 +215,14 @@ Turn on debug logging first (see docs/TESTING.md). Note the result of each step 
       message carries a `Co-Authored-By` trailer for Claude. To check on the repo page: the topic
       `smart-merge` looks like a typo for `smart-meter`, and `v0.2.0b8` and `v0.2.0b9` should be
       marked Pre-release.
+      **Review findings (17 Nov 2026).** A HACS reviewer found one blocking and one minor
+      issue; both are fixed in 0.2.2 (branch `fix/hacs-review-event-loop`). Blocking:
+      `tariff.zone_for` built a `ZoneInfo` on the event loop, which reads the tz database from
+      disk on first use. `tariff.prime_zones()` now loads every allowed zone, and runs in an
+      executor at entry setup and at the start of the options flow, so `zone_for` is only ever a
+      cache hit on the loop. Minor: `tls.async_create_session` leaked a session per setup. The
+      entry now closes its session on unload, the config flow closes its session when the flow
+      ends (and before a password retry), and one shutdown listener covers any still open.
 - [ ] Optional: post on the HA community forum (thread "Reading Australian
       smart meter data" has people asking for exactly this).
 
