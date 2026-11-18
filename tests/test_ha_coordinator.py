@@ -215,7 +215,9 @@ async def _poll_at(
     """
     local_now = datetime.fromisoformat(f"{local}+11:00")
     monkeypatch.setattr(
-        MyEnergyCoordinator, "_now", staticmethod(lambda tz=None: local_now if tz is None else local_now.astimezone(tz))
+        MyEnergyCoordinator,
+        "_now",
+        staticmethod(lambda tz=None: local_now if tz is None else local_now.astimezone(tz)),
     )
     coordinator = _coordinator(hass)
     if error:
