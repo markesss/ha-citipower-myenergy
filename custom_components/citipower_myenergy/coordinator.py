@@ -6,7 +6,7 @@ import logging
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, tzinfo
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -120,6 +120,12 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
 
     # --- Polling ----------------------------------------------------------------
 
+    @staticmethod
+    def _now(tz: tzinfo | None = None) -> datetime:
+        """Return the current time; one place to replace in tests (the clock cannot be frozen
+        into the past while the recorder is running)."""
+        return dt_util.now(tz)
+
     async def _async_update_data(self) -> MyEnergyData:
         """Poll, then set the delay to the next poll (Home Assistant re-arms from it)."""
         try:
@@ -129,14 +135,14 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         except Exception:
             self._failures += 1
             self.update_interval = after_failure(
-                dt_util.now(),
+                self._now(),
                 yesterday_complete=self._yesterday_complete(self.data),
                 failures=self._failures,
             )
             raise
         self._failures = 0
         self.update_interval = after_success(
-            dt_util.now(), yesterday_complete=self._yesterday_complete(data)
+            self._now(), yesterday_complete=self._yesterday_complete(data)
         )
         _LOGGER.debug("Next myEnergy poll for %s in %s", self.log_name, self.update_interval)
         return data
@@ -145,7 +151,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         """Return whether the portal has published yesterday's readings (market time)."""
         if data is None:
             return False
-        yesterday = dt_util.now(MARKET_TZ).date() - timedelta(days=1)
+        yesterday = self._now(MARKET_TZ).date() - timedelta(days=1)
         return any(
             summary.last_day is not None and summary.last_day >= yesterday
             for summary in data.channels.values()

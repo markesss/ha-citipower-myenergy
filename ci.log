@@ -1,0 +1,1024 @@
+2026-11-17T20:56:29.4564876Z runner-desktop(version:v6.0.0)
+2026-11-17T20:56:29.4565022Z ::group::Runner Information
+2026-11-17T20:56:29.4565058Z Runner labels: runner-desktop, ubuntu-latest, ubuntu-24.04, ubuntu-22.04
+2026-11-17T20:56:29.4565077Z Task: 418
+2026-11-17T20:56:29.4565081Z Job: tests
+2026-11-17T20:56:29.4565086Z Repository: markess/ha-citipower-myenergy
+2026-11-17T20:56:29.4565095Z Triggered by event: pull_request
+2026-11-17T20:56:29.4565101Z ::endgroup::
+2026-11-17T20:56:29.4565108Z ::group::Operating System
+2026-11-17T20:56:29.4565210Z Alpine Linux v3.24
+2026-11-17T20:56:29.4565216Z linux/amd64
+2026-11-17T20:56:29.4565220Z ::endgroup::
+2026-11-17T20:56:29.4569008Z workflow prepared
+2026-11-17T20:56:29.4667489Z ::group::Starting job container
+2026-11-17T20:56:29.4667554Z image: docker.gitea.com/runner-images:ubuntu-latest
+2026-11-17T20:56:29.4667582Z name: GITEA-ACTIONS-TASK-418-WORKFLOW-Validate-JOB-tests-ruff--pytest-6f387660ca144b352c1f0ac6bfcf8ecbeb561c62f0a43098616d8b2c6400f23b
+2026-11-17T20:56:29.4667613Z network: GITEA-ACTIONS-TASK-418-WORKFLOW-Validate-JOB-tests-ruff--pytest-6f387660ca144b352c1f0ac6bfcf8ecbeb561c62f0a43098616d8b2c6400f23b-tests-network
+2026-11-17T20:56:29.4726998Z Cleaning up network for job ruff + pytest, and network name is: GITEA-ACTIONS-TASK-418-WORKFLOW-Validate-JOB-tests-ruff--pytest-6f387660ca144b352c1f0ac6bfcf8ecbeb561c62f0a43098616d8b2c6400f23b-tests-network
+2026-11-17T20:56:29.4872505Z docker pull image=docker.gitea.com/runner-images:ubuntu-latest platform= username= forcePull=false
+2026-11-17T20:56:29.5633508Z docker create image=docker.gitea.com/runner-images:ubuntu-latest platform= entrypoint=["sleep" "10800"] cmd=[] network="GITEA-ACTIONS-TASK-418-WORKFLOW-Validate-JOB-tests-ruff--pytest-6f387660ca144b352c1f0ac6bfcf8ecbeb561c62f0a43098616d8b2c6400f23b-tests-network"
+2026-11-17T20:56:29.6205726Z docker run image=docker.gitea.com/runner-images:ubuntu-latest platform= entrypoint=["sleep" "10800"] cmd=[] network="GITEA-ACTIONS-TASK-418-WORKFLOW-Validate-JOB-tests-ruff--pytest-6f387660ca144b352c1f0ac6bfcf8ecbeb561c62f0a43098616d8b2c6400f23b-tests-network"
+2026-11-17T20:56:29.8742943Z ::endgroup::
+2026-11-17T20:56:29.8743478Z Prepare all required actions
+2026-11-17T20:56:30.1320054Z Download action repository 'actions/checkout@v7' (SHA:3d3c42e5aac5ba805825da76410c181273ba90b1)
+2026-11-17T20:56:30.1651414Z Download action repository 'actions/setup-python@v7' (SHA:6d4fd22b20465ccc0f7354476588e8df7c9ca0e0)
+2026-11-17T20:56:30.1656307Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-11-17T20:56:30.1656966Z Complete job name: ruff + pytest
+2026-11-17T20:56:30.1745607Z ::group::Run actions/checkout@v7
+2026-11-17T20:56:30.1745791Z with:
+2026-11-17T20:56:30.1745867Z   allow-unsafe-pr-checkout: false
+2026-11-17T20:56:30.1745885Z   clean: true
+2026-11-17T20:56:30.1745900Z   fetch-depth: 1
+2026-11-17T20:56:30.1745913Z   fetch-tags: false
+2026-11-17T20:56:30.1745931Z   lfs: false
+2026-11-17T20:56:30.1745942Z   persist-credentials: true
+2026-11-17T20:56:30.1745961Z   repository: markess/ha-citipower-myenergy
+2026-11-17T20:56:30.1745975Z   set-safe-directory: true
+2026-11-17T20:56:30.1745988Z   show-progress: true
+2026-11-17T20:56:30.1745999Z   sparse-checkout-cone-mode: true
+2026-11-17T20:56:30.1746011Z   ssh-strict: true
+2026-11-17T20:56:30.1746022Z   ssh-user: git
+2026-11-17T20:56:30.1746033Z   submodules: false
+2026-11-17T20:56:30.1746047Z   token: ***
+2026-11-17T20:56:30.1746068Z ::endgroup::
+2026-11-17T20:56:30.4051567Z Syncing repository: markess/ha-citipower-myenergy
+2026-11-17T20:56:30.4051943Z ::group::Getting Git version info
+2026-11-17T20:56:30.4051982Z Working directory is '/workspace/markess/ha-citipower-myenergy'
+2026-11-17T20:56:30.4082168Z [command]/usr/bin/git version
+2026-11-17T20:56:30.4109412Z git version 2.56.0
+2026-11-17T20:56:30.4119853Z ::endgroup::
+2026-11-17T20:56:30.4131905Z Temporarily overriding HOME='/tmp/ba4fe7ee-f4fe-4307-9854-0f8ae6f76e09' before making global git config changes
+2026-11-17T20:56:30.4132321Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-17T20:56:30.4135665Z [command]/usr/bin/git config --global --add safe.directory /workspace/markess/ha-citipower-myenergy
+2026-11-17T20:56:30.4157133Z Deleting the contents of '/workspace/markess/ha-citipower-myenergy'
+2026-11-17T20:56:30.4160746Z ::group::Determining repository object format
+2026-11-17T20:56:30.4161627Z ::endgroup::
+2026-11-17T20:56:30.4161827Z ::group::Initializing the repository
+2026-11-17T20:56:30.4164617Z [command]/usr/bin/git init /workspace/markess/ha-citipower-myenergy
+2026-11-17T20:56:30.4356633Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-17T20:56:30.4356904Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-17T20:56:30.4356937Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-17T20:56:30.4356959Z hint: call:
+2026-11-17T20:56:30.4356976Z hint:
+2026-11-17T20:56:30.4356993Z hint: 	git config --global init.defaultBranch <name>
+2026-11-17T20:56:30.4357010Z hint:
+2026-11-17T20:56:30.4357038Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-17T20:56:30.4357057Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-17T20:56:30.4357076Z hint:
+2026-11-17T20:56:30.4357092Z hint: 	git branch -m <name>
+2026-11-17T20:56:30.4357105Z hint:
+2026-11-17T20:56:30.4357115Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-17T20:56:30.4357164Z Initialized empty Git repository in /workspace/markess/ha-citipower-myenergy/.git/
+2026-11-17T20:56:30.4363782Z [command]/usr/bin/git remote add origin https://gitea.apps.blackteddy.au/markess/ha-citipower-myenergy
+2026-11-17T20:56:30.4386043Z ::endgroup::
+2026-11-17T20:56:30.4386258Z ::group::Disabling automatic garbage collection
+2026-11-17T20:56:30.4390136Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-17T20:56:30.4407056Z ::endgroup::
+2026-11-17T20:56:30.4407240Z ::group::Setting up auth
+2026-11-17T20:56:30.4407424Z Removing SSH command configuration
+2026-11-17T20:56:30.4411706Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-17T20:56:30.4433340Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-17T20:56:30.4651546Z Removing HTTP extra header
+2026-11-17T20:56:30.4655955Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/gitea\.apps\.blackteddy\.au\/\.extraheader
+2026-11-17T20:56:30.4674362Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/gitea\.apps\.blackteddy\.au\/\.extraheader' && git config --local --unset-all 'http.https://gitea.apps.blackteddy.au/.extraheader' || :"
+2026-11-17T20:56:30.4862684Z Removing includeIf entries pointing to credentials config files
+2026-11-17T20:56:30.4867081Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-17T20:56:30.4888843Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-17T20:56:30.5081391Z [command]/usr/bin/git config --file /tmp/git-credentials-0829a09e-63be-4eac-91b2-86f8b6c35dd5.config http.https://gitea.apps.blackteddy.au/.extraheader AUTHORIZATION: basic ***
+2026-11-17T20:56:30.5108938Z [command]/usr/bin/git config --local includeIf.gitdir:/workspace/markess/ha-citipower-myenergy/.git.path /tmp/git-credentials-0829a09e-63be-4eac-91b2-86f8b6c35dd5.config
+2026-11-17T20:56:30.5128423Z [command]/usr/bin/git config --local includeIf.gitdir:/workspace/markess/ha-citipower-myenergy/.git/worktrees/*.path /tmp/git-credentials-0829a09e-63be-4eac-91b2-86f8b6c35dd5.config
+2026-11-17T20:56:30.5147907Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git.path /github/runner_temp/git-credentials-0829a09e-63be-4eac-91b2-86f8b6c35dd5.config
+2026-11-17T20:56:30.5257437Z [command]/usr/bin/git config --local includeIf.gitdir:/github/workspace/.git/worktrees/*.path /github/runner_temp/git-credentials-0829a09e-63be-4eac-91b2-86f8b6c35dd5.config
+2026-11-17T20:56:30.5273172Z ::endgroup::
+2026-11-17T20:56:30.5273380Z ::group::Fetching the repository
+2026-11-17T20:56:30.5278310Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +f4c31440a4c3d0bf128c7d1b34d57ec7a1f2458c:refs/remotes/pull/7/head
+2026-11-17T20:56:30.8762151Z From https://gitea.apps.blackteddy.au/markess/ha-citipower-myenergy
+2026-11-17T20:56:30.8762426Z  * [new ref]         f4c31440a4c3d0bf128c7d1b34d57ec7a1f2458c -> pull/7/head
+2026-11-17T20:56:30.8763730Z ::endgroup::
+2026-11-17T20:56:30.8764045Z ::group::Determining the checkout info
+2026-11-17T20:56:30.8764105Z ::endgroup::
+2026-11-17T20:56:30.8769124Z [command]/usr/bin/git sparse-checkout disable
+2026-11-17T20:56:30.8793460Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-17T20:56:30.8811427Z ::group::Checking out the ref
+2026-11-17T20:56:30.8815867Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/7/head
+2026-11-17T20:56:30.8898131Z Note: switching to 'refs/remotes/pull/7/head'.
+2026-11-17T20:56:30.8898315Z 
+2026-11-17T20:56:30.8898355Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-17T20:56:30.8898407Z changes and commit them, and you can discard any commits you make in this
+2026-11-17T20:56:30.8898426Z state without impacting any branches by switching back to a branch.
+2026-11-17T20:56:30.8898444Z 
+2026-11-17T20:56:30.8898455Z If you want to create a new branch to retain commits you create, you may
+2026-11-17T20:56:30.8898471Z do so (now or later) by using -c with the switch command. Example:
+2026-11-17T20:56:30.8898486Z 
+2026-11-17T20:56:30.8898498Z   git switch -c <new-branch-name>
+2026-11-17T20:56:30.8898511Z 
+2026-11-17T20:56:30.8898524Z Or undo this operation with:
+2026-11-17T20:56:30.8898543Z 
+2026-11-17T20:56:30.8898556Z   git switch -
+2026-11-17T20:56:30.8898567Z 
+2026-11-17T20:56:30.8898578Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-17T20:56:30.8898593Z 
+2026-11-17T20:56:30.8898616Z HEAD is now at f4c3144 Poll in a nightly catch-up window instead of every 4 hours
+2026-11-17T20:56:30.8901671Z ::endgroup::
+2026-11-17T20:56:30.8924380Z [command]/usr/bin/git log -1 --format=%H
+2026-11-17T20:56:30.8939457Z f4c31440a4c3d0bf128c7d1b34d57ec7a1f2458c
+2026-11-17T20:56:30.9436435Z ::group::Run actions/setup-python@v7
+2026-11-17T20:56:30.9436572Z with:
+2026-11-17T20:56:30.9436610Z   allow-prereleases: false
+2026-11-17T20:56:30.9436628Z   check-latest: false
+2026-11-17T20:56:30.9436642Z   freethreaded: false
+2026-11-17T20:56:30.9436656Z   mirror: https://raw.githubusercontent.com/actions/python-versions/main
+2026-11-17T20:56:30.9436674Z   python-version: 3.13
+2026-11-17T20:56:30.9436685Z   update-environment: true
+2026-11-17T20:56:30.9436706Z ::endgroup::
+2026-11-17T20:56:32.0537239Z ::group::Installed versions
+2026-11-17T20:56:32.0544586Z Version 3.13 was not found in the local cache
+2026-11-17T20:56:32.8256760Z Version 3.13 is available for downloading
+2026-11-17T20:56:32.8257047Z Download from "https://github.com/actions/python-versions/releases/download/3.13.18-40336726450/python-3.13.18-linux-24.04-x64.tar.gz"
+2026-11-17T20:56:42.5699832Z Extract downloaded archive
+2026-11-17T20:56:42.5782946Z [command]/usr/bin/tar xz --warning=no-unknown-keyword --overwrite -C /tmp/f92ffc21-5a9f-40aa-b3ba-ac2a2d9f4d1a -f /tmp/96f73068-b1a6-418d-a957-0dbb091018ca
+2026-11-17T20:56:46.1122576Z Execute installation script
+2026-11-17T20:56:46.1200229Z Check if Python hostedtoolcache folder exist...
+2026-11-17T20:56:46.1200481Z Creating Python hostedtoolcache folder...
+2026-11-17T20:56:46.1216320Z Create Python 3.13.18 folder
+2026-11-17T20:56:46.1225733Z Copy Python binaries to hostedtoolcache folder
+2026-11-17T20:56:46.7313732Z Create additional symlinks (Required for the UsePythonVersion Azure Pipelines task and the setup-python GitHub Action)
+2026-11-17T20:56:46.7354366Z Upgrading pip...
+2026-11-17T20:56:48.6400636Z Collecting pip
+2026-11-17T20:56:48.7110701Z Downloading pip-26.3-py3-none-any.whl.metadata (4.6 kB)
+2026-11-17T20:56:48.7438650Z Downloading pip-26.3-py3-none-any.whl (2.0 MB)
+2026-11-17T20:56:48.9312061Z ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.0/2.0 MB 11.5 MB/s  0:00:00
+2026-11-17T20:56:48.9312549Z 
+2026-11-17T20:56:49.0067061Z Installing collected packages: pip
+2026-11-17T20:56:49.0067324Z Attempting uninstall: pip
+2026-11-17T20:56:49.0083516Z Found existing installation: pip 26.2.2
+2026-11-17T20:56:49.0300927Z Uninstalling pip-26.2.2:
+2026-11-17T20:56:49.0334405Z Successfully uninstalled pip-26.2.2
+2026-11-17T20:56:50.3601147Z Successfully installed pip-26.3
+2026-11-17T20:56:50.4187447Z Create complete file
+2026-11-17T20:56:50.4217694Z Successfully set up CPython (3.13.18)
+2026-11-17T20:56:50.4217883Z ::endgroup::
+2026-11-17T20:56:50.5217537Z ::group::Run pip install -r requirements-dev.txt
+2026-11-17T20:56:50.5217621Z pip install -r requirements-dev.txt
+2026-11-17T20:56:50.5217644Z shell: bash -e {0}
+2026-11-17T20:56:50.5217668Z ::endgroup::
+2026-11-17T20:56:51.2537452Z Collecting pytest-homeassistant-custom-component==0.13.316 (from -r requirements-dev.txt (line 3))
+2026-11-17T20:56:51.3152350Z   Downloading pytest_homeassistant_custom_component-0.13.316-py3-none-any.whl.metadata (5.7 kB)
+2026-11-17T20:56:51.3426227Z Collecting pytest-cov (from -r requirements-dev.txt (line 4))
+2026-11-17T20:56:51.3465902Z   Downloading pytest_cov-7.1.0-py3-none-any.whl.metadata (32 kB)
+2026-11-17T20:56:51.7980988Z Collecting ruff (from -r requirements-dev.txt (line 5))
+2026-11-17T20:56:51.8033751Z   Downloading ruff-0.17.5-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (20 kB)
+2026-11-17T20:56:51.8368341Z Collecting tzdata (from -r requirements-dev.txt (line 7))
+2026-11-17T20:56:51.8415480Z   Downloading tzdata-2026.6-py2.py3-none-any.whl.metadata (1.4 kB)
+2026-11-17T20:56:52.2111985Z Collecting sqlalchemy (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:52.2164024Z   Downloading sqlalchemy-2.1.9-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (9.7 kB)
+2026-11-17T20:56:52.7868984Z Collecting coverage==7.10.6 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:52.7930003Z   Downloading coverage-7.10.6-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (8.9 kB)
+2026-11-17T20:56:53.0564838Z Collecting freezegun==1.5.2 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:53.0611474Z   Downloading freezegun-1.5.2-py3-none-any.whl.metadata (13 kB)
+2026-11-17T20:56:53.0891462Z Collecting license-expression==30.4.3 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:53.0943012Z   Downloading license_expression-30.4.3-py3-none-any.whl.metadata (11 kB)
+2026-11-17T20:56:53.3269371Z Collecting mock-open==1.4.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:53.3321647Z   Downloading mock-open-1.4.0.tar.gz (12 kB)
+2026-11-17T20:56:53.3445197Z   Installing build dependencies: started
+2026-11-17T20:56:54.3723499Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:56:54.3731191Z   Getting requirements to build wheel: started
+2026-11-17T20:56:54.8414984Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:56:54.8421889Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:56:55.1180776Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:56:55.2468934Z Collecting pydantic==2.12.2 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:55.2566185Z   Downloading pydantic-2.12.2-py3-none-any.whl.metadata (85 kB)
+2026-11-17T20:56:55.4962190Z Collecting pylint-per-file-ignores==1.4.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:55.5013406Z   Downloading pylint_per_file_ignores-1.4.0-py3-none-any.whl.metadata (2.0 kB)
+2026-11-17T20:56:55.7587682Z Collecting pipdeptree==2.26.1 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:55.7637795Z   Downloading pipdeptree-2.26.1-py3-none-any.whl.metadata (14 kB)
+2026-11-17T20:56:55.7900022Z Collecting pytest-asyncio==1.3.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:55.7945333Z   Downloading pytest_asyncio-1.3.0-py3-none-any.whl.metadata (4.1 kB)
+2026-11-17T20:56:56.0335459Z Collecting pytest-aiohttp==1.1.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:56.0383205Z   Downloading pytest_aiohttp-1.1.0-py3-none-any.whl.metadata (2.7 kB)
+2026-11-17T20:56:56.0479958Z Collecting pytest-cov (from -r requirements-dev.txt (line 4))
+2026-11-17T20:56:56.0535669Z   Downloading pytest_cov-7.0.0-py3-none-any.whl.metadata (31 kB)
+2026-11-17T20:56:56.2895403Z Collecting pytest-freezer==0.4.9 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:56.2941992Z   Downloading pytest_freezer-0.4.9-py3-none-any.whl.metadata (2.1 kB)
+2026-11-17T20:56:56.5407096Z Collecting pytest-github-actions-annotate-failures==0.3.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:56.5462131Z   Downloading pytest_github_actions_annotate_failures-0.3.0-py3-none-any.whl.metadata (3.3 kB)
+2026-11-17T20:56:56.7872889Z Collecting pytest-socket==0.7.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:56.7931664Z   Downloading pytest_socket-0.7.0-py3-none-any.whl.metadata (6.7 kB)
+2026-11-17T20:56:57.0233234Z Collecting pytest-sugar==1.0.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.0282394Z   Downloading pytest_sugar-1.0.0-py3-none-any.whl.metadata (4.4 kB)
+2026-11-17T20:56:57.0492855Z Collecting pytest-timeout==2.4.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.0537235Z   Downloading pytest_timeout-2.4.0-py3-none-any.whl.metadata (20 kB)
+2026-11-17T20:56:57.2964443Z Collecting pytest-unordered==0.7.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.3019356Z   Downloading pytest_unordered-0.7.0-py3-none-any.whl.metadata (6.7 kB)
+2026-11-17T20:56:57.3260967Z Collecting pytest-picked==0.5.1 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.3318841Z   Downloading pytest_picked-0.5.1-py3-none-any.whl.metadata (4.0 kB)
+2026-11-17T20:56:57.3593762Z Collecting pytest-xdist==3.8.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.3631474Z   Downloading pytest_xdist-3.8.0-py3-none-any.whl.metadata (3.0 kB)
+2026-11-17T20:56:57.4253565Z Collecting pytest==9.0.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.4305415Z   Downloading pytest-9.0.0-py3-none-any.whl.metadata (7.6 kB)
+2026-11-17T20:56:57.4552525Z Collecting requests-mock==1.12.1 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.4620882Z   Downloading requests_mock-1.12.1-py2.py3-none-any.whl.metadata (4.1 kB)
+2026-11-17T20:56:57.4906767Z Collecting respx==0.22.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.4953577Z   Downloading respx-0.22.0-py2.py3-none-any.whl.metadata (4.1 kB)
+2026-11-17T20:56:57.5316672Z Collecting syrupy==5.0.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.5374721Z   Downloading syrupy-5.0.0-py3-none-any.whl.metadata (39 kB)
+2026-11-17T20:56:57.6135249Z Collecting tqdm==4.67.1 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.6178381Z   Downloading tqdm-4.67.1-py3-none-any.whl.metadata (57 kB)
+2026-11-17T20:56:57.8491018Z Collecting homeassistant==2026.2.3 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.8550677Z   Downloading homeassistant-2026.2.3-py3-none-any.whl.metadata (4.8 kB)
+2026-11-17T20:56:57.8717134Z Collecting sqlalchemy (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.8772063Z   Downloading sqlalchemy-2.0.41-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (9.6 kB)
+2026-11-17T20:56:57.9019976Z Collecting paho-mqtt==2.1.0 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:57.9074864Z   Downloading paho_mqtt-2.1.0-py3-none-any.whl.metadata (23 kB)
+2026-11-17T20:56:58.1654257Z Collecting numpy==2.3.2 (from pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.1704678Z   Downloading numpy-2.3.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (62 kB)
+2026-11-17T20:56:58.2162137Z Collecting pluggy>=1.2 (from pytest-cov->-r requirements-dev.txt (line 4))
+2026-11-17T20:56:58.2202367Z   Downloading pluggy-1.7.0-py3-none-any.whl.metadata (5.0 kB)
+2026-11-17T20:56:58.2457968Z Collecting python-dateutil>=2.7 (from freezegun==1.5.2->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.2504841Z   Downloading python_dateutil-4.0.0-py3-none-any.whl.metadata (7.3 kB)
+2026-11-17T20:56:58.2787719Z Collecting aiodns==4.0.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.2849012Z   Downloading aiodns-4.0.0-py3-none-any.whl.metadata (7.7 kB)
+2026-11-17T20:56:58.3098627Z Collecting aiohasupervisor==0.3.3 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.3152976Z   Downloading aiohasupervisor-0.3.3-py3-none-any.whl.metadata (5.0 kB)
+2026-11-17T20:56:58.8508648Z Collecting aiohttp==3.13.3 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.8566443Z   Downloading aiohttp-3.13.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.1 kB)
+2026-11-17T20:56:58.8830184Z Collecting aiohttp_cors==0.8.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.8878434Z   Downloading aiohttp_cors-0.8.1-py3-none-any.whl.metadata (20 kB)
+2026-11-17T20:56:58.9125635Z Collecting aiohttp-fast-zlib==0.3.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.9177859Z   Downloading aiohttp_fast_zlib-0.3.0-py3-none-any.whl.metadata (5.7 kB)
+2026-11-17T20:56:58.9425573Z Collecting aiohttp-asyncmdnsresolver==0.1.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.9470928Z   Downloading aiohttp_asyncmdnsresolver-0.1.1-py3-none-any.whl.metadata (16 kB)
+2026-11-17T20:56:58.9721154Z Collecting aiozoneinfo==0.2.3 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:58.9770877Z   Downloading aiozoneinfo-0.2.3-py3-none-any.whl.metadata (5.4 kB)
+2026-11-17T20:56:59.0068627Z Collecting annotatedyaml==1.0.2 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.0119252Z   Downloading annotatedyaml-1.0.2-cp313-cp313-manylinux_2_36_x86_64.whl.metadata (4.2 kB)
+2026-11-17T20:56:59.0382632Z Collecting astral==2.2 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.0434174Z   Downloading astral-2.2-py2.py3-none-any.whl.metadata (1.5 kB)
+2026-11-17T20:56:59.0684812Z Collecting async-interrupt==1.2.2 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.0732656Z   Downloading async_interrupt-1.2.2-py3-none-any.whl.metadata (4.9 kB)
+2026-11-17T20:56:59.0988493Z Collecting attrs==25.4.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.1040706Z   Downloading attrs-25.4.0-py3-none-any.whl.metadata (10 kB)
+2026-11-17T20:56:59.1288057Z Collecting atomicwrites-homeassistant==1.4.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.1345131Z   Downloading atomicwrites_homeassistant-1.4.1-py2.py3-none-any.whl.metadata (6.0 kB)
+2026-11-17T20:56:59.1613119Z Collecting audioop-lts==0.2.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.1660799Z   Downloading audioop_lts-0.2.1-cp313-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (1.6 kB)
+2026-11-17T20:56:59.1950793Z Collecting awesomeversion==25.8.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.2003550Z   Downloading awesomeversion-25.8.0-py3-none-any.whl.metadata (9.8 kB)
+2026-11-17T20:56:59.2543994Z Collecting bcrypt==5.0.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.2585053Z   Downloading bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl.metadata (10 kB)
+2026-11-17T20:56:59.2879468Z Collecting certifi>=2021.5.30 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.2922859Z   Downloading certifi-2026.10.23-py3-none-any.whl.metadata (2.5 kB)
+2026-11-17T20:56:59.3308942Z Collecting ciso8601==2.3.3 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.3367291Z   Downloading ciso8601-2.3.3-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (24 kB)
+2026-11-17T20:56:59.3610682Z Collecting cronsim==2.7 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.3660728Z   Downloading cronsim-2.7-py3-none-any.whl.metadata (6.9 kB)
+2026-11-17T20:56:59.4150213Z Collecting fnv-hash-fast==1.6.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.4203870Z   Downloading fnv_hash_fast-1.6.0-cp313-cp313-manylinux_2_36_x86_64.whl.metadata (4.9 kB)
+2026-11-17T20:56:59.4552611Z Collecting hass-nabucasa==1.12.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.4595071Z   Downloading hass_nabucasa-1.12.0-py3-none-any.whl.metadata (4.3 kB)
+2026-11-17T20:56:59.4854460Z Collecting httpx==0.28.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.4894537Z   Downloading httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+2026-11-17T20:56:59.5164664Z Collecting home-assistant-bluetooth==1.13.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.5216021Z   Downloading home_assistant_bluetooth-1.13.1-py3-none-any.whl.metadata (5.4 kB)
+2026-11-17T20:56:59.5445613Z Collecting ifaddr==0.2.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.5494187Z   Downloading ifaddr-0.2.0-py3-none-any.whl.metadata (4.9 kB)
+2026-11-17T20:56:59.5749736Z Collecting Jinja2==3.1.6 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.5795120Z   Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+2026-11-17T20:56:59.6161626Z Collecting lru-dict==1.3.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:56:59.6213991Z   Downloading lru-dict-1.3.0.tar.gz (13 kB)
+2026-11-17T20:56:59.6346847Z   Installing build dependencies: started
+2026-11-17T20:57:00.5462668Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:00.5467768Z   Getting requirements to build wheel: started
+2026-11-17T20:57:01.2685650Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:01.2693054Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:01.5690024Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:01.6108453Z Collecting PyJWT==2.10.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:01.6167068Z   Downloading PyJWT-2.10.1-py3-none-any.whl.metadata (4.0 kB)
+2026-11-17T20:57:01.8381824Z Collecting cryptography==46.0.5 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:01.8454402Z   Downloading cryptography-46.0.5-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (5.7 kB)
+2026-11-17T20:57:02.0641198Z Collecting Pillow==12.0.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.0696136Z   Downloading pillow-12.0.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (8.8 kB)
+2026-11-17T20:57:02.1922309Z Collecting propcache==0.4.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.1979531Z   Downloading propcache-0.4.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (13 kB)
+2026-11-17T20:57:02.2449439Z Collecting pyOpenSSL==25.3.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.2506274Z   Downloading pyopenssl-25.3.0-py3-none-any.whl.metadata (17 kB)
+2026-11-17T20:57:02.5674743Z Collecting orjson==3.11.5 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.5727189Z   Downloading orjson-3.11.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (41 kB)
+2026-11-17T20:57:02.6034099Z Collecting packaging>=23.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.6042678Z   Using cached packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+2026-11-17T20:57:02.6322954Z Collecting psutil-home-assistant==0.0.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.6376583Z   Downloading psutil_home_assistant-0.0.1-py3-none-any.whl.metadata (882 bytes)
+2026-11-17T20:57:02.6687572Z Collecting python-slugify==8.0.4 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.6736024Z   Downloading python_slugify-8.0.4-py2.py3-none-any.whl.metadata (8.5 kB)
+2026-11-17T20:57:02.7333804Z Collecting PyYAML==6.0.3 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.7376222Z   Downloading pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+2026-11-17T20:57:02.7864761Z Collecting requests==2.32.5 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.7910479Z   Downloading requests-2.32.5-py3-none-any.whl.metadata (4.9 kB)
+2026-11-17T20:57:02.8224722Z Collecting securetar==2025.2.1 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.8265185Z   Downloading securetar-2025.2.1-py3-none-any.whl.metadata (2.2 kB)
+2026-11-17T20:57:02.8663721Z Collecting standard-aifc==3.13.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.8714247Z   Downloading standard_aifc-3.13.0-py3-none-any.whl.metadata (969 bytes)
+2026-11-17T20:57:02.9014607Z Collecting standard-telnetlib==3.13.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.9065723Z   Downloading standard_telnetlib-3.13.0-py3-none-any.whl.metadata (868 bytes)
+2026-11-17T20:57:02.9408216Z Collecting typing-extensions<5.0,>=4.15.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:02.9444608Z   Downloading typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+2026-11-17T20:57:03.1003048Z Collecting ulid-transform==1.5.2 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:03.1058498Z   Downloading ulid_transform-1.5.2-cp313-cp313-manylinux_2_36_x86_64.whl.metadata (5.6 kB)
+2026-11-17T20:57:03.1609291Z Collecting urllib3>=2.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:03.1656824Z   Downloading urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+2026-11-17T20:57:03.5070001Z Collecting uv==0.9.26 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:03.5130732Z   Downloading uv-0.9.26-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (11 kB)
+2026-11-17T20:57:03.5540531Z Collecting voluptuous==0.15.2 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:03.5589949Z   Downloading voluptuous-0.15.2-py3-none-any.whl.metadata (20 kB)
+2026-11-17T20:57:03.5829975Z Collecting voluptuous-serialize==2.7.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:03.5889031Z   Downloading voluptuous_serialize-2.7.0-py3-none-any.whl.metadata (1.9 kB)
+2026-11-17T20:57:03.6118061Z Collecting voluptuous-openapi==0.2.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:03.6160066Z   Downloading voluptuous_openapi-0.2.0-py3-none-any.whl.metadata (1.7 kB)
+2026-11-17T20:57:03.9427653Z Collecting yarl==1.22.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:03.9479907Z   Downloading yarl-1.22.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (75 kB)
+2026-11-17T20:57:03.9811181Z Collecting webrtc-models==0.3.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:03.9864131Z   Downloading webrtc_models-0.3.0-py3-none-any.whl.metadata (2.9 kB)
+2026-11-17T20:57:04.5477117Z Collecting zeroconf==0.148.0 (from homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:04.5650802Z   Downloading zeroconf-0.148.0-cp313-cp313-manylinux_2_36_x86_64.whl.metadata (6.3 kB)
+2026-11-17T20:57:04.6749163Z Collecting pycares<6,>=5.0.0 (from aiodns==4.0.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:04.6941679Z   Downloading pycares-5.2.1-cp313-cp313-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (4.1 kB)
+2026-11-17T20:57:04.7306898Z Collecting mashumaro<4.0,>=3.11 (from aiohasupervisor==0.3.3->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:04.7443705Z   Downloading mashumaro-3.23-py3-none-any.whl.metadata (22 kB)
+2026-11-17T20:57:04.7757204Z Collecting aiohappyeyeballs>=2.5.0 (from aiohttp==3.13.3->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:04.7944132Z   Downloading aiohappyeyeballs-2.7.1-py3-none-any.whl.metadata (5.9 kB)
+2026-11-17T20:57:04.8177452Z Collecting aiosignal>=1.4.0 (from aiohttp==3.13.3->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:04.8217600Z   Downloading aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+2026-11-17T20:57:04.9032951Z Collecting frozenlist>=1.1.1 (from aiohttp==3.13.3->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:04.9090765Z   Downloading frozenlist-1.8.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+2026-11-17T20:57:05.2339612Z Collecting multidict<7.0,>=4.5 (from aiohttp==3.13.3->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:05.2434302Z   Downloading multidict-6.9.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+2026-11-17T20:57:05.2904998Z Collecting idna>=2.0 (from yarl==1.22.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:05.2945842Z   Downloading idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+2026-11-17T20:57:05.3667304Z Collecting pytz (from astral==2.2->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:05.3709871Z   Downloading pytz-2026.6-py2.py3-none-any.whl.metadata (22 kB)
+2026-11-17T20:57:05.5169879Z Collecting cffi>=2.0.0 (from cryptography==46.0.5->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:05.5310334Z   Downloading cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+2026-11-17T20:57:05.5571183Z Collecting fnvhash<0.3,>=0.1 (from fnv-hash-fast==1.6.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:05.5808981Z   Downloading fnvhash-0.2.1-py3-none-any.whl.metadata (1.6 kB)
+2026-11-17T20:57:05.6211260Z Collecting acme==5.2.2 (from hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:05.6428642Z   Downloading acme-5.2.2-py3-none-any.whl.metadata (1.3 kB)
+2026-11-17T20:57:05.6678273Z Collecting async_timeout>=4 (from hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:05.6718611Z   Downloading async_timeout-5.0.1-py3-none-any.whl.metadata (5.1 kB)
+2026-11-17T20:57:06.4492214Z Collecting grpcio<2,>=1.75.1 (from hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:06.4551422Z   Downloading grpcio-1.85.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (3.8 kB)
+2026-11-17T20:57:06.7087075Z Collecting icmplib<4,>=3 (from hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:06.7145121Z   Downloading icmplib-3.0.4-py3-none-any.whl.metadata (19 kB)
+2026-11-17T20:57:06.7490362Z Collecting josepy<3,>=2 (from hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:06.7553339Z   Downloading josepy-2.3.0-py3-none-any.whl.metadata (1.6 kB)
+2026-11-17T20:57:06.7959011Z Collecting pycognito==2024.5.1 (from hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:06.8014824Z   Downloading pycognito-2024.5.1-py3-none-any.whl.metadata (24 kB)
+2026-11-17T20:57:06.8444358Z Collecting snitun==0.45.1 (from hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:06.8497512Z   Downloading snitun-0.45.1-py3-none-any.whl.metadata (6.4 kB)
+2026-11-17T20:57:07.1080487Z Collecting sentence-stream<2,>=1.2.0 (from hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:07.1131336Z   Downloading sentence_stream-1.4.0-py3-none-any.whl.metadata (5.2 kB)
+2026-11-17T20:57:07.1530326Z Collecting pyrfc3339 (from acme==5.2.2->hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:07.1586768Z   Downloading pyrfc3339-2.1.1-py3-none-any.whl.metadata (2.7 kB)
+2026-11-17T20:57:07.5694441Z Collecting habluetooth>=3.0 (from home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:07.5746711Z   Downloading habluetooth-7.1.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:07.6254016Z Collecting anyio (from httpx==0.28.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:07.6295960Z   Downloading anyio-4.16.0-py3-none-any.whl.metadata (4.7 kB)
+2026-11-17T20:57:07.6623417Z Collecting httpcore==1.* (from httpx==0.28.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:07.6674568Z   Downloading httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+2026-11-17T20:57:07.7635820Z Collecting MarkupSafe>=2.0 (from Jinja2==3.1.6->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:07.7685975Z   Downloading markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+2026-11-17T20:57:07.8147723Z Collecting boolean.py>=4.0 (from license-expression==30.4.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:07.8195883Z   Downloading boolean_py-5.0-py3-none-any.whl.metadata (2.3 kB)
+2026-11-17T20:57:07.8448750Z Requirement already satisfied: pip>=24.2 in /opt/hostedtoolcache/Python/3.13.18/x64/lib/python3.13/site-packages (from pipdeptree==2.26.1->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3)) (26.3)
+2026-11-17T20:57:07.9385645Z Collecting psutil (from psutil-home-assistant==0.0.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:07.9437065Z   Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl.metadata (22 kB)
+2026-11-17T20:57:08.2712997Z Collecting boto3>=1.10.49 (from pycognito==2024.5.1->hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:08.2770088Z   Downloading boto3-1.44.5-py3-none-any.whl.metadata (6.6 kB)
+2026-11-17T20:57:08.3166941Z Collecting envs>=1.3 (from pycognito==2024.5.1->hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:08.3216010Z   Downloading envs-1.4-py3-none-any.whl.metadata (842 bytes)
+2026-11-17T20:57:08.4336972Z Collecting annotated-types>=0.6.0 (from pydantic==2.12.2->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:08.4377632Z   Downloading annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+2026-11-17T20:57:09.3234660Z Collecting pydantic-core==2.41.4 (from pydantic==2.12.2->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:09.3283124Z   Downloading pydantic_core-2.41.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (7.3 kB)
+2026-11-17T20:57:09.4815030Z Collecting typing-inspection>=0.4.2 (from pydantic==2.12.2->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:09.4856870Z   Downloading typing_inspection-0.4.5-py3-none-any.whl.metadata (2.6 kB)
+2026-11-17T20:57:09.5934441Z Collecting iniconfig>=1.0.1 (from pytest==9.0.0->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:09.5978391Z   Downloading iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+2026-11-17T20:57:09.7160536Z Collecting pygments>=2.7.2 (from pytest==9.0.0->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:09.7207686Z   Downloading pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+2026-11-17T20:57:09.8185352Z Collecting termcolor>=2.1.0 (from pytest-sugar==1.0.0->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:09.8231844Z   Downloading termcolor-3.3.0-py3-none-any.whl.metadata (6.5 kB)
+2026-11-17T20:57:09.9071506Z Collecting execnet>=2.1 (from pytest-xdist==3.8.0->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:09.9123675Z   Downloading execnet-2.1.2-py3-none-any.whl.metadata (2.9 kB)
+2026-11-17T20:57:10.0113566Z Collecting text-unidecode>=1.3 (from python-slugify==8.0.4->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:10.0162088Z   Downloading text_unidecode-1.3-py2.py3-none-any.whl.metadata (2.4 kB)
+2026-11-17T20:57:10.2322514Z Collecting charset_normalizer<4,>=2 (from requests==2.32.5->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:10.2382048Z   Downloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (46 kB)
+2026-11-17T20:57:10.5012659Z Collecting greenlet>=1 (from sqlalchemy->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:10.5066917Z   Downloading greenlet-3.5.6-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
+2026-11-17T20:57:10.5915178Z Collecting standard-chunk (from standard-aifc==3.13.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:10.5965091Z   Downloading standard_chunk-3.13.0-py3-none-any.whl.metadata (860 bytes)
+2026-11-17T20:57:10.7121990Z Collecting h11>=0.16 (from httpcore==1.*->httpx==0.28.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:10.7172697Z   Downloading h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+2026-11-17T20:57:11.4677569Z Collecting regex>=2024.11.6 (from sentence-stream<2,>=1.2.0->hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:11.4736585Z   Downloading regex-2026.11.15-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (40 kB)
+2026-11-17T20:57:11.8207804Z Collecting botocore<1.45.0,>=1.44.5 (from boto3>=1.10.49->pycognito==2024.5.1->hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:11.8271122Z   Downloading botocore-1.44.5-py3-none-any.whl.metadata (5.6 kB)
+2026-11-17T20:57:11.9169949Z Collecting jmespath<2.0.0,>=0.7.1 (from boto3>=1.10.49->pycognito==2024.5.1->hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:11.9215685Z   Downloading jmespath-1.1.0-py3-none-any.whl.metadata (7.6 kB)
+2026-11-17T20:57:12.0878755Z Collecting s3transfer<0.20.0,>=0.19.0 (from boto3>=1.10.49->pycognito==2024.5.1->hass-nabucasa==1.12.0->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:12.0927360Z   Downloading s3transfer-0.19.3-py3-none-any.whl.metadata (1.7 kB)
+2026-11-17T20:57:12.2033049Z Collecting python-dateutil>=2.7 (from freezegun==1.5.2->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:12.2079554Z   Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+2026-11-17T20:57:12.3561340Z Collecting six>=1.5 (from python-dateutil>=2.7->freezegun==1.5.2->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:12.3609860Z   Downloading six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+2026-11-17T20:57:12.5675276Z Collecting pycparser (from cffi>=2.0.0->cryptography==46.0.5->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:12.5721309Z   Downloading pycparser-3.12-py3-none-any.whl.metadata (9.7 kB)
+2026-11-17T20:57:12.6803154Z Collecting bleak>=3.0.2 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:12.6851539Z   Downloading bleak-3.1.0-py3-none-any.whl.metadata (4.7 kB)
+2026-11-17T20:57:12.8782603Z Collecting bleak-retry-connector>=4.7.1 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:12.8832638Z   Downloading bleak_retry_connector-4.7.1-py3-none-any.whl.metadata (7.3 kB)
+2026-11-17T20:57:13.0373198Z Collecting bluetooth-adapters>=2.4.0 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.0433455Z   Downloading bluetooth_adapters-2.4.0-py3-none-any.whl.metadata (5.3 kB)
+2026-11-17T20:57:13.1617937Z Collecting bluetooth-auto-recovery>=1.6.4 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.1665534Z   Downloading bluetooth_auto_recovery-1.6.4-py3-none-any.whl.metadata (5.5 kB)
+2026-11-17T20:57:13.3047054Z Collecting bluetooth-data-tools>=1.29.24 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.3104616Z   Downloading bluetooth_data_tools-1.29.24-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (7.4 kB)
+2026-11-17T20:57:13.3655433Z Collecting btsocket>=0.3.0 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.3702184Z   Downloading btsocket-0.3.0-py2.py3-none-any.whl.metadata (7.0 kB)
+2026-11-17T20:57:13.8081155Z Collecting dbus-fast>=5.2.0 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.8139655Z   Downloading dbus_fast-5.2.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (11 kB)
+2026-11-17T20:57:13.8509063Z Collecting aiooui>=0.1.1 (from bluetooth-adapters>=2.4.0->habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.8561365Z   Downloading aiooui-0.1.11-py3-none-any.whl.metadata (6.5 kB)
+2026-11-17T20:57:13.8786490Z Collecting uart-devices>=0.1.0 (from bluetooth-adapters>=2.4.0->habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.8836459Z   Downloading uart_devices-0.1.1-py3-none-any.whl.metadata (4.9 kB)
+2026-11-17T20:57:13.9075659Z Collecting usb-devices>=0.4.5 (from bluetooth-adapters>=2.4.0->habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.9121342Z   Downloading usb_devices-0.5.1-py3-none-any.whl.metadata (5.3 kB)
+2026-11-17T20:57:13.9365805Z Collecting PyRIC>=0.1.6.3 (from bluetooth-auto-recovery>=1.6.4->habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:13.9412187Z   Downloading PyRIC-0.1.6.3.tar.gz (870 kB)
+2026-11-17T20:57:14.0226873Z      ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 870.4/870.4 kB 10.4 MB/s  0:00:00
+2026-11-17T20:57:14.0448856Z   Installing build dependencies: started
+2026-11-17T20:57:14.7650463Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:14.7655614Z   Getting requirements to build wheel: started
+2026-11-17T20:57:15.2026399Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:15.2038674Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:15.4477331Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:15.4527641Z Collecting habluetooth>=3.0 (from home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:15.4584385Z   Downloading habluetooth-7.1.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:15.4914811Z INFO: pip is looking at multiple versions of bluetooth-data-tools to determine which version is compatible with other requirements. This could take a while.
+2026-11-17T20:57:15.4973248Z   Downloading habluetooth-7.0.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:15.5128734Z   Downloading habluetooth-6.26.11-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:15.5233152Z Collecting bluetooth-data-tools>=1.29.23 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:15.5278698Z   Downloading bluetooth_data_tools-1.29.23-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (7.4 kB)
+2026-11-17T20:57:15.5377293Z Collecting habluetooth>=3.0 (from home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:15.5432249Z   Downloading habluetooth-6.26.10-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:15.5582001Z   Downloading habluetooth-6.26.9-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:15.5680155Z INFO: pip is still looking at multiple versions of bluetooth-data-tools to determine which version is compatible with other requirements. This could take a while.
+2026-11-17T20:57:15.5741933Z   Downloading habluetooth-6.26.8-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:15.5909504Z   Downloading habluetooth-6.26.7-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:15.6021449Z INFO: This is taking longer than usual. You might need to provide the dependency resolver with stricter constraints to reduce runtime. See https://pip.pypa.io/warnings/backtracking for guidance. If you want to abort this run, press Ctrl + C.
+2026-11-17T20:57:15.6025920Z Collecting bluetooth-data-tools>=1.29.21 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:15.6073936Z   Downloading bluetooth_data_tools-1.29.22-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (7.4 kB)
+2026-11-17T20:57:15.6217357Z   Downloading bluetooth_data_tools-1.29.21.tar.gz (21 kB)
+2026-11-17T20:57:15.6337961Z   Installing build dependencies: started
+2026-11-17T20:57:17.3462411Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:17.3466666Z   Getting requirements to build wheel: started
+2026-11-17T20:57:17.6466127Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:17.6472780Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:17.9352075Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:17.9372935Z Collecting habluetooth>=3.0 (from home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:17.9427981Z   Downloading habluetooth-6.26.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:17.9747139Z   Downloading habluetooth-6.26.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:17.9871745Z Collecting bluetooth-data-tools>=1.29.18 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:17.9922144Z   Downloading bluetooth_data_tools-1.29.20.tar.gz (20 kB)
+2026-11-17T20:57:18.0047610Z   Installing build dependencies: started
+2026-11-17T20:57:19.2298912Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:19.2302196Z   Getting requirements to build wheel: started
+2026-11-17T20:57:19.5052111Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:19.5058972Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:19.8308006Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:19.8383811Z   Downloading bluetooth_data_tools-1.29.19.tar.gz (20 kB)
+2026-11-17T20:57:19.8561613Z   Installing build dependencies: started
+2026-11-17T20:57:21.0444682Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:21.0446503Z   Getting requirements to build wheel: started
+2026-11-17T20:57:21.3565976Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:21.3572684Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:21.6902116Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:21.6964187Z   Downloading bluetooth_data_tools-1.29.18.tar.gz (20 kB)
+2026-11-17T20:57:21.7186627Z   Installing build dependencies: started
+2026-11-17T20:57:22.9446975Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:22.9452374Z   Getting requirements to build wheel: started
+2026-11-17T20:57:23.2461565Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:23.2467875Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:23.5738376Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:23.5757553Z Collecting habluetooth>=3.0 (from home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:23.5822623Z   Downloading habluetooth-6.26.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:23.6106286Z   Downloading habluetooth-6.26.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:23.6281655Z   Downloading habluetooth-6.26.2.tar.gz (116 kB)
+2026-11-17T20:57:23.6552736Z   Installing build dependencies: started
+2026-11-17T20:57:24.8440085Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:24.8444801Z   Getting requirements to build wheel: started
+2026-11-17T20:57:25.1417631Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:25.1423681Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:25.6269419Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:25.6368018Z   Downloading habluetooth-6.26.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.6633922Z   Downloading habluetooth-6.26.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.6828534Z   Downloading habluetooth-6.25.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.7008360Z   Downloading habluetooth-6.25.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.7191374Z   Downloading habluetooth-6.24.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.7368662Z   Downloading habluetooth-6.23.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.7546294Z   Downloading habluetooth-6.23.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.7708430Z   Downloading habluetooth-6.22.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.7874924Z   Downloading habluetooth-6.21.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.8041196Z   Downloading habluetooth-6.20.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.8199993Z   Downloading habluetooth-6.19.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.8394612Z   Downloading habluetooth-6.19.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.8599278Z   Downloading habluetooth-6.18.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.8823666Z   Downloading habluetooth-6.17.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.9010271Z   Downloading habluetooth-6.16.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.9191629Z   Downloading habluetooth-6.15.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.9374238Z   Downloading habluetooth-6.14.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.9542181Z   Downloading habluetooth-6.13.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.9716722Z   Downloading habluetooth-6.12.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:25.9923983Z   Downloading habluetooth-6.11.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.0108905Z   Downloading habluetooth-6.10.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.0271742Z   Downloading habluetooth-6.9.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.0457090Z   Downloading habluetooth-6.8.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.0640156Z   Downloading habluetooth-6.8.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.0813132Z   Downloading habluetooth-6.8.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.1009430Z   Downloading habluetooth-6.8.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.1282403Z   Downloading habluetooth-6.7.9-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.1462197Z   Downloading habluetooth-6.7.8-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.1631113Z   Downloading habluetooth-6.7.7-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.1835347Z   Downloading habluetooth-6.7.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.2006635Z   Downloading habluetooth-6.7.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.2197323Z   Downloading habluetooth-6.7.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.2403394Z   Downloading habluetooth-6.7.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.2603199Z   Downloading habluetooth-6.7.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:26.2735941Z Collecting bluetooth-data-tools>=1.29.7 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:26.2786277Z   Downloading bluetooth_data_tools-1.29.17.tar.gz (19 kB)
+2026-11-17T20:57:26.2911300Z   Installing build dependencies: started
+2026-11-17T20:57:27.4714298Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:27.4714684Z   Getting requirements to build wheel: started
+2026-11-17T20:57:27.7359246Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:27.7364523Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:28.0086587Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:28.0150634Z   Downloading bluetooth_data_tools-1.29.16.tar.gz (20 kB)
+2026-11-17T20:57:28.0410820Z   Installing build dependencies: started
+2026-11-17T20:57:29.2187668Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:29.2191291Z   Getting requirements to build wheel: started
+2026-11-17T20:57:29.5089268Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:29.5096420Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:29.7853981Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:29.7927185Z   Downloading bluetooth_data_tools-1.29.15.tar.gz (19 kB)
+2026-11-17T20:57:29.8127012Z   Installing build dependencies: started
+2026-11-17T20:57:30.9228570Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:30.9230247Z   Getting requirements to build wheel: started
+2026-11-17T20:57:31.2171505Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:31.2177093Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:31.5336010Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:31.5408847Z   Downloading bluetooth_data_tools-1.29.14.tar.gz (19 kB)
+2026-11-17T20:57:31.5595841Z   Installing build dependencies: started
+2026-11-17T20:57:32.7587045Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:32.7593164Z   Getting requirements to build wheel: started
+2026-11-17T20:57:33.0424371Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:33.0432577Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:33.3899763Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:33.3986479Z   Downloading bluetooth_data_tools-1.29.13.tar.gz (19 kB)
+2026-11-17T20:57:33.4269008Z   Installing build dependencies: started
+2026-11-17T20:57:34.6632270Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:34.6634740Z   Getting requirements to build wheel: started
+2026-11-17T20:57:34.9108252Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:34.9113984Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:35.2323698Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:35.2383372Z   Downloading bluetooth_data_tools-1.29.12.tar.gz (19 kB)
+2026-11-17T20:57:35.2518266Z   Installing build dependencies: started
+2026-11-17T20:57:36.4701431Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:36.4701752Z   Getting requirements to build wheel: started
+2026-11-17T20:57:36.7645779Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:36.7650833Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:37.0939152Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:37.1013214Z   Downloading bluetooth_data_tools-1.29.11.tar.gz (19 kB)
+2026-11-17T20:57:37.1287680Z   Installing build dependencies: started
+2026-11-17T20:57:38.3638980Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:38.3639302Z   Getting requirements to build wheel: started
+2026-11-17T20:57:38.6641518Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:38.6646448Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:38.9984122Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:39.0054993Z   Downloading bluetooth_data_tools-1.29.10.tar.gz (19 kB)
+2026-11-17T20:57:39.0253722Z   Installing build dependencies: started
+2026-11-17T20:57:40.2321253Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:40.2325377Z   Getting requirements to build wheel: started
+2026-11-17T20:57:40.5308657Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:40.5315802Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:40.8725025Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:40.8797620Z   Downloading bluetooth_data_tools-1.29.9.tar.gz (19 kB)
+2026-11-17T20:57:40.8986712Z   Installing build dependencies: started
+2026-11-17T20:57:42.0930649Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:42.0934173Z   Getting requirements to build wheel: started
+2026-11-17T20:57:42.3799637Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:42.3806264Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:42.6919981Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:42.6998674Z   Downloading bluetooth_data_tools-1.29.8.tar.gz (19 kB)
+2026-11-17T20:57:42.7171116Z   Installing build dependencies: started
+2026-11-17T20:57:43.7791091Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:43.7797549Z   Getting requirements to build wheel: started
+2026-11-17T20:57:44.0938950Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:44.0943419Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:44.4094318Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:44.4162181Z   Downloading bluetooth_data_tools-1.29.7.tar.gz (19 kB)
+2026-11-17T20:57:44.4357374Z   Installing build dependencies: started
+2026-11-17T20:57:45.6044546Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:45.6047567Z   Getting requirements to build wheel: started
+2026-11-17T20:57:45.9205165Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:45.9213756Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:46.2496806Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:46.2514359Z Collecting habluetooth>=3.0 (from home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:46.2579507Z   Downloading habluetooth-6.7.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:46.2835150Z   Downloading habluetooth-6.7.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:46.3086169Z   Downloading habluetooth-6.6.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:46.3288533Z   Downloading habluetooth-6.6.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:46.3519490Z   Downloading habluetooth-6.5.0.tar.gz (70 kB)
+2026-11-17T20:57:46.3779867Z   Installing build dependencies: started
+2026-11-17T20:57:47.5879502Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:47.5883005Z   Getting requirements to build wheel: started
+2026-11-17T20:57:47.8680359Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:47.8686178Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:48.3491781Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:48.3621117Z   Downloading habluetooth-6.4.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:48.3967572Z   Downloading habluetooth-6.3.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:48.4224355Z   Downloading habluetooth-6.3.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:48.4492745Z   Downloading habluetooth-6.2.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:48.4723433Z   Downloading habluetooth-6.2.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:48.4959924Z   Downloading habluetooth-6.1.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.4 kB)
+2026-11-17T20:57:48.5229378Z Collecting bluetooth-data-tools>=1.28.0 (from habluetooth>=3.0->home-assistant-bluetooth==1.13.1->homeassistant==2026.2.3->pytest-homeassistant-custom-component==0.13.316->-r requirements-dev.txt (line 3))
+2026-11-17T20:57:48.5283376Z   Downloading bluetooth_data_tools-1.29.6-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (7.4 kB)
+2026-11-17T20:57:48.5438833Z   Downloading bluetooth_data_tools-1.29.5-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (7.4 kB)
+2026-11-17T20:57:48.5590477Z   Downloading bluetooth_data_tools-1.29.4.tar.gz (18 kB)
+2026-11-17T20:57:48.5731087Z   Installing build dependencies: started
+2026-11-17T20:57:49.7489498Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:49.7492944Z   Getting requirements to build wheel: started
+2026-11-17T20:57:50.0643046Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:50.0648028Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:50.3898829Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:50.3963436Z   Downloading bluetooth_data_tools-1.29.3.tar.gz (18 kB)
+2026-11-17T20:57:50.4267743Z   Installing build dependencies: started
+2026-11-17T20:57:51.3836785Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:51.3837131Z   Getting requirements to build wheel: started
+2026-11-17T20:57:51.5944450Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:51.5949888Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:51.8575017Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:51.8642491Z   Downloading bluetooth_data_tools-1.29.2.tar.gz (18 kB)
+2026-11-17T20:57:51.8944439Z   Installing build dependencies: started
+2026-11-17T20:57:53.0249284Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:53.0251922Z   Getting requirements to build wheel: started
+2026-11-17T20:57:53.3105723Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:53.3111126Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:53.4873808Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:53.5014241Z   Downloading bluetooth_data_tools-1.29.1.tar.gz (18 kB)
+2026-11-17T20:57:53.5186962Z   Installing build dependencies: started
+2026-11-17T20:57:54.3494631Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:54.3499216Z   Getting requirements to build wheel: started
+2026-11-17T20:57:54.5556175Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:54.5559324Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:54.7726640Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:54.7811727Z   Downloading bluetooth_data_tools-1.29.0.tar.gz (18 kB)
+2026-11-17T20:57:54.8008091Z   Installing build dependencies: started
+2026-11-17T20:57:55.4827203Z   Installing build dependencies: finished with status 'done'
+2026-11-17T20:57:55.4829391Z   Getting requirements to build wheel: started
+2026-11-17T20:57:55.6877632Z   Getting requirements to build wheel: finished with status 'done'
+2026-11-17T20:57:55.6884193Z   Preparing metadata (pyproject.toml): started
+2026-11-17T20:57:55.9037903Z   Preparing metadata (pyproject.toml): finished with status 'done'
+2026-11-17T20:57:55.9101953Z   Downloading bluetooth_data_tools-1.28.4-cp313-cp313-manylinux_2_36_x86_64.whl.metadata (5.2 kB)
+2026-11-17T20:57:55.9703000Z Downloading pytest_homeassistant_custom_component-0.13.316-py3-none-any.whl (71 kB)
+2026-11-17T20:57:55.9858175Z Downloading pytest_cov-7.0.0-py3-none-any.whl (22 kB)
+2026-11-17T20:57:56.0009274Z Downloading coverage-7.10.6-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (251 kB)
+2026-11-17T20:57:56.0347462Z Downloading freezegun-1.5.2-py3-none-any.whl (18 kB)
+2026-11-17T20:57:56.0477254Z Downloading homeassistant-2026.2.3-py3-none-any.whl (51.2 MB)
+2026-11-17T20:57:59.9651397Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 51.2/51.2 MB 13.1 MB/s  0:00:03
+2026-11-17T20:57:59.9709984Z Downloading aiodns-4.0.0-py3-none-any.whl (11 kB)
+2026-11-17T20:57:59.9834142Z Downloading aiohasupervisor-0.3.3-py3-none-any.whl (40 kB)
+2026-11-17T20:57:59.9989500Z Downloading aiohttp-3.13.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.7 MB)
+2026-11-17T20:58:00.1622729Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.7/1.7 MB 10.8 MB/s  0:00:00
+2026-11-17T20:58:00.1679327Z Downloading orjson-3.11.5-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (138 kB)
+2026-11-17T20:58:00.1997490Z Downloading yarl-1.22.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (377 kB)
+2026-11-17T20:58:00.2410568Z Downloading aiohttp_asyncmdnsresolver-0.1.1-py3-none-any.whl (13 kB)
+2026-11-17T20:58:00.2534742Z Downloading aiohttp_cors-0.8.1-py3-none-any.whl (25 kB)
+2026-11-17T20:58:00.2686534Z Downloading aiohttp_fast_zlib-0.3.0-py3-none-any.whl (8.6 kB)
+2026-11-17T20:58:00.2850529Z Downloading aiozoneinfo-0.2.3-py3-none-any.whl (8.0 kB)
+2026-11-17T20:58:00.3013556Z Downloading annotatedyaml-1.0.2-cp313-cp313-manylinux_2_36_x86_64.whl (69 kB)
+2026-11-17T20:58:00.3211285Z Downloading astral-2.2-py2.py3-none-any.whl (30 kB)
+2026-11-17T20:58:00.3372696Z Downloading async_interrupt-1.2.2-py3-none-any.whl (8.9 kB)
+2026-11-17T20:58:00.3501984Z Downloading atomicwrites_homeassistant-1.4.1-py2.py3-none-any.whl (7.1 kB)
+2026-11-17T20:58:00.3638972Z Downloading attrs-25.4.0-py3-none-any.whl (67 kB)
+2026-11-17T20:58:00.3820867Z Downloading audioop_lts-0.2.1-cp313-abi3-manylinux_2_5_x86_64.manylinux1_x86_64.manylinux_2_17_x86_64.manylinux2014_x86_64.whl (82 kB)
+2026-11-17T20:58:00.4012002Z Downloading awesomeversion-25.8.0-py3-none-any.whl (15 kB)
+2026-11-17T20:58:00.4140440Z Downloading bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl (278 kB)
+2026-11-17T20:58:00.4472984Z Downloading ciso8601-2.3.3-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (41 kB)
+2026-11-17T20:58:00.4621124Z Downloading cronsim-2.7-py3-none-any.whl (14 kB)
+2026-11-17T20:58:00.4761919Z Downloading cryptography-46.0.5-cp311-abi3-manylinux_2_34_x86_64.whl (4.5 MB)
+2026-11-17T20:58:00.8491258Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 4.5/4.5 MB 12.0 MB/s  0:00:00
+2026-11-17T20:58:00.8598853Z Downloading fnv_hash_fast-1.6.0-cp313-cp313-manylinux_2_36_x86_64.whl (14 kB)
+2026-11-17T20:58:00.8734287Z Downloading hass_nabucasa-1.12.0-py3-none-any.whl (89 kB)
+2026-11-17T20:58:00.8934612Z Downloading webrtc_models-0.3.0-py3-none-any.whl (7.5 kB)
+2026-11-17T20:58:00.9079941Z Downloading acme-5.2.2-py3-none-any.whl (94 kB)
+2026-11-17T20:58:00.9286395Z Downloading home_assistant_bluetooth-1.13.1-py3-none-any.whl (7.9 kB)
+2026-11-17T20:58:00.9417619Z Downloading httpx-0.28.1-py3-none-any.whl (73 kB)
+2026-11-17T20:58:00.9623274Z Downloading ifaddr-0.2.0-py3-none-any.whl (12 kB)
+2026-11-17T20:58:00.9751548Z Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+2026-11-17T20:58:00.9990236Z Downloading license_expression-30.4.3-py3-none-any.whl (117 kB)
+2026-11-17T20:58:01.0218693Z Downloading numpy-2.3.2-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (16.6 MB)
+2026-11-17T20:58:02.2852492Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.6/16.6 MB 13.2 MB/s  0:00:01
+2026-11-17T20:58:02.2899726Z Downloading paho_mqtt-2.1.0-py3-none-any.whl (67 kB)
+2026-11-17T20:58:02.3084753Z Downloading pillow-12.0.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (7.0 MB)
+2026-11-17T20:58:02.8587632Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.0/7.0 MB 12.8 MB/s  0:00:00
+2026-11-17T20:58:02.8654974Z Downloading pipdeptree-2.26.1-py3-none-any.whl (32 kB)
+2026-11-17T20:58:02.8817613Z Downloading propcache-0.4.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (204 kB)
+2026-11-17T20:58:02.9114381Z Downloading psutil_home_assistant-0.0.1-py3-none-any.whl (6.3 kB)
+2026-11-17T20:58:02.9252612Z Downloading pycognito-2024.5.1-py3-none-any.whl (26 kB)
+2026-11-17T20:58:02.9393227Z Downloading pydantic-2.12.2-py3-none-any.whl (460 kB)
+2026-11-17T20:58:02.9989516Z Downloading pydantic_core-2.41.4-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+2026-11-17T20:58:03.1458522Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 14.6 MB/s  0:00:00
+2026-11-17T20:58:03.1579558Z Downloading PyJWT-2.10.1-py3-none-any.whl (22 kB)
+2026-11-17T20:58:03.1720963Z Downloading pylint_per_file_ignores-1.4.0-py3-none-any.whl (4.9 kB)
+2026-11-17T20:58:03.1876063Z Downloading pyopenssl-25.3.0-py3-none-any.whl (57 kB)
+2026-11-17T20:58:03.2065739Z Downloading pytest-9.0.0-py3-none-any.whl (373 kB)
+2026-11-17T20:58:03.2576329Z Downloading pytest_aiohttp-1.1.0-py3-none-any.whl (8.9 kB)
+2026-11-17T20:58:03.2819741Z Downloading pytest_asyncio-1.3.0-py3-none-any.whl (15 kB)
+2026-11-17T20:58:03.3066142Z Downloading pytest_freezer-0.4.9-py3-none-any.whl (3.2 kB)
+2026-11-17T20:58:03.3267358Z Downloading pytest_github_actions_annotate_failures-0.3.0-py3-none-any.whl (6.0 kB)
+2026-11-17T20:58:03.3494627Z Downloading pytest_picked-0.5.1-py3-none-any.whl (6.6 kB)
+2026-11-17T20:58:03.3664653Z Downloading pytest_socket-0.7.0-py3-none-any.whl (6.8 kB)
+2026-11-17T20:58:03.3889270Z Downloading pytest_sugar-1.0.0-py3-none-any.whl (10 kB)
+2026-11-17T20:58:03.4078148Z Downloading pytest_timeout-2.4.0-py3-none-any.whl (14 kB)
+2026-11-17T20:58:03.4219016Z Downloading pytest_unordered-0.7.0-py3-none-any.whl (6.2 kB)
+2026-11-17T20:58:03.4395512Z Downloading pytest_xdist-3.8.0-py3-none-any.whl (46 kB)
+2026-11-17T20:58:03.4629950Z Downloading python_slugify-8.0.4-py2.py3-none-any.whl (10 kB)
+2026-11-17T20:58:03.4843885Z Downloading pyyaml-6.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (801 kB)
+2026-11-17T20:58:03.5624016Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 801.6/801.6 kB 9.4 MB/s  0:00:00
+2026-11-17T20:58:03.5666339Z Downloading requests-2.32.5-py3-none-any.whl (64 kB)
+2026-11-17T20:58:03.5924125Z Downloading requests_mock-1.12.1-py2.py3-none-any.whl (27 kB)
+2026-11-17T20:58:03.6156498Z Downloading respx-0.22.0-py2.py3-none-any.whl (25 kB)
+2026-11-17T20:58:03.6324892Z Downloading securetar-2025.2.1-py3-none-any.whl (11 kB)
+2026-11-17T20:58:03.6444605Z Downloading snitun-0.45.1-py3-none-any.whl (51 kB)
+2026-11-17T20:58:03.6648954Z Downloading sqlalchemy-2.0.41-cp313-cp313-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (3.2 MB)
+2026-11-17T20:58:03.9418953Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 3.2/3.2 MB 11.6 MB/s  0:00:00
+2026-11-17T20:58:03.9480178Z Downloading standard_aifc-3.13.0-py3-none-any.whl (10 kB)
+2026-11-17T20:58:03.9649652Z Downloading standard_telnetlib-3.13.0-py3-none-any.whl (10.0 kB)
+2026-11-17T20:58:03.9910353Z Downloading syrupy-5.0.0-py3-none-any.whl (49 kB)
+2026-11-17T20:58:04.0135471Z Downloading tqdm-4.67.1-py3-none-any.whl (78 kB)
+2026-11-17T20:58:04.0374581Z Downloading ulid_transform-1.5.2-cp313-cp313-manylinux_2_36_x86_64.whl (49 kB)
+2026-11-17T20:58:04.0565285Z Downloading uv-0.9.26-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (23.3 MB)
+2026-11-17T20:58:05.8671313Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 23.3/23.3 MB 12.9 MB/s  0:00:01
+2026-11-17T20:58:05.8730372Z Downloading voluptuous-0.15.2-py3-none-any.whl (31 kB)
+2026-11-17T20:58:05.8924405Z Downloading voluptuous_openapi-0.2.0-py3-none-any.whl (10 kB)
+2026-11-17T20:58:05.9065071Z Downloading voluptuous_serialize-2.7.0-py3-none-any.whl (7.8 kB)
+2026-11-17T20:58:05.9184115Z Downloading zeroconf-0.148.0-cp313-cp313-manylinux_2_36_x86_64.whl (2.1 MB)
+2026-11-17T20:58:06.1067240Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 2.1/2.1 MB 11.3 MB/s  0:00:00
+2026-11-17T20:58:06.1111489Z Downloading charset_normalizer-3.5.2-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (254 kB)
+2026-11-17T20:58:06.1527685Z Downloading fnvhash-0.2.1-py3-none-any.whl (18 kB)
+2026-11-17T20:58:06.1675814Z Downloading grpcio-1.85.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (7.4 MB)
+2026-11-17T20:58:06.7155240Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 7.4/7.4 MB 13.4 MB/s  0:00:00
+2026-11-17T20:58:06.7201275Z Downloading httpcore-1.0.9-py3-none-any.whl (78 kB)
+2026-11-17T20:58:06.7383333Z Downloading icmplib-3.0.4-py3-none-any.whl (30 kB)
+2026-11-17T20:58:06.7519137Z Downloading idna-3.20-py3-none-any.whl (69 kB)
+2026-11-17T20:58:06.7707271Z Downloading josepy-2.3.0-py3-none-any.whl (29 kB)
+2026-11-17T20:58:06.7857959Z Downloading mashumaro-3.23-py3-none-any.whl (78 kB)
+2026-11-17T20:58:06.8035534Z Downloading multidict-6.9.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (336 kB)
+2026-11-17T20:58:06.8325131Z Downloading pluggy-1.7.0-py3-none-any.whl (27 kB)
+2026-11-17T20:58:06.8461438Z Downloading pycares-5.2.1-cp313-cp313-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (229 kB)
+2026-11-17T20:58:06.8667302Z Downloading sentence_stream-1.4.0-py3-none-any.whl (14 kB)
+2026-11-17T20:58:06.8798608Z Downloading typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+2026-11-17T20:58:06.8935633Z Downloading urllib3-2.8.0-py3-none-any.whl (135 kB)
+2026-11-17T20:58:06.9169024Z Downloading ruff-0.17.5-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (10.6 MB)
+2026-11-17T20:58:07.7182137Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 10.6/10.6 MB 13.2 MB/s  0:00:00
+2026-11-17T20:58:07.7229823Z Downloading tzdata-2026.6-py2.py3-none-any.whl (348 kB)
+2026-11-17T20:58:07.7608292Z Downloading aiohappyeyeballs-2.7.1-py3-none-any.whl (15 kB)
+2026-11-17T20:58:07.7732115Z Downloading aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+2026-11-17T20:58:07.7854151Z Downloading annotated_types-0.8.0-py3-none-any.whl (13 kB)
+2026-11-17T20:58:07.7983958Z Downloading async_timeout-5.0.1-py3-none-any.whl (6.2 kB)
+2026-11-17T20:58:07.8102797Z Downloading boolean_py-5.0-py3-none-any.whl (26 kB)
+2026-11-17T20:58:07.8240528Z Downloading boto3-1.44.5-py3-none-any.whl (140 kB)
+2026-11-17T20:58:07.8466285Z Downloading botocore-1.44.5-py3-none-any.whl (16.6 MB)
+2026-11-17T20:58:09.1286582Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 16.6/16.6 MB 13.0 MB/s  0:00:01
+2026-11-17T20:58:09.1325616Z Downloading jmespath-1.1.0-py3-none-any.whl (20 kB)
+2026-11-17T20:58:09.1489032Z Downloading python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+2026-11-17T20:58:09.1795190Z Downloading s3transfer-0.19.3-py3-none-any.whl (90 kB)
+2026-11-17T20:58:09.1995923Z Downloading certifi-2026.10.23-py3-none-any.whl (135 kB)
+2026-11-17T20:58:09.2218561Z Downloading cffi-2.1.1-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (221 kB)
+2026-11-17T20:58:09.2511353Z Downloading envs-1.4-py3-none-any.whl (10 kB)
+2026-11-17T20:58:09.2637559Z Downloading execnet-2.1.2-py3-none-any.whl (40 kB)
+2026-11-17T20:58:09.2787510Z Downloading frozenlist-1.8.0-cp313-cp313-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (234 kB)
+2026-11-17T20:58:09.3020231Z Downloading greenlet-3.5.6-cp313-cp313-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (623 kB)
+2026-11-17T20:58:09.3716453Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 623.8/623.8 kB 7.8 MB/s  0:00:00
+2026-11-17T20:58:09.3757509Z Downloading h11-0.16.0-py3-none-any.whl (37 kB)
+2026-11-17T20:58:09.3909853Z Downloading habluetooth-6.1.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (714 kB)
+2026-11-17T20:58:09.4704755Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 714.1/714.1 kB 8.2 MB/s  0:00:00
+2026-11-17T20:58:09.4750995Z Downloading bluetooth_data_tools-1.28.4-cp313-cp313-manylinux_2_36_x86_64.whl (140 kB)
+2026-11-17T20:58:09.4982988Z Downloading bleak-3.1.0-py3-none-any.whl (176 kB)
+2026-11-17T20:58:09.5251878Z Downloading bleak_retry_connector-4.7.1-py3-none-any.whl (19 kB)
+2026-11-17T20:58:09.5381670Z Downloading bluetooth_adapters-2.4.0-py3-none-any.whl (20 kB)
+2026-11-17T20:58:09.5512318Z Downloading aiooui-0.1.11-py3-none-any.whl (343 kB)
+2026-11-17T20:58:09.5935870Z Downloading bluetooth_auto_recovery-1.6.4-py3-none-any.whl (13 kB)
+2026-11-17T20:58:09.6063947Z Downloading btsocket-0.3.0-py2.py3-none-any.whl (14 kB)
+2026-11-17T20:58:09.6195747Z Downloading dbus_fast-5.2.0-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (896 kB)
+2026-11-17T20:58:09.7017300Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 896.5/896.5 kB 10.8 MB/s  0:00:00
+2026-11-17T20:58:09.7054582Z Downloading iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+2026-11-17T20:58:09.7181846Z Downloading markupsafe-3.0.4-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (23 kB)
+2026-11-17T20:58:09.7280838Z Using cached packaging-26.3-py3-none-any.whl (129 kB)
+2026-11-17T20:58:09.7321388Z Downloading pygments-2.21.0-py3-none-any.whl (1.3 MB)
+2026-11-17T20:58:09.8533158Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.3/1.3 MB 10.0 MB/s  0:00:00
+2026-11-17T20:58:09.8583332Z Downloading regex-2026.11.15-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (809 kB)
+2026-11-17T20:58:09.9470216Z    ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 809.3/809.3 kB 8.3 MB/s  0:00:00
+2026-11-17T20:58:09.9512828Z Downloading six-1.17.0-py2.py3-none-any.whl (11 kB)
+2026-11-17T20:58:09.9655808Z Downloading termcolor-3.3.0-py3-none-any.whl (7.7 kB)
+2026-11-17T20:58:09.9789070Z Downloading text_unidecode-1.3-py2.py3-none-any.whl (78 kB)
+2026-11-17T20:58:09.9955401Z Downloading typing_inspection-0.4.5-py3-none-any.whl (14 kB)
+2026-11-17T20:58:10.0093165Z Downloading uart_devices-0.1.1-py3-none-any.whl (4.8 kB)
+2026-11-17T20:58:10.0221621Z Downloading usb_devices-0.5.1-py3-none-any.whl (5.4 kB)
+2026-11-17T20:58:10.0349282Z Downloading anyio-4.16.0-py3-none-any.whl (134 kB)
+2026-11-17T20:58:10.0576357Z Downloading psutil-7.2.2-cp36-abi3-manylinux2010_x86_64.manylinux_2_12_x86_64.manylinux_2_28_x86_64.whl (155 kB)
+2026-11-17T20:58:10.0816071Z Downloading pycparser-3.12-py3-none-any.whl (62 kB)
+2026-11-17T20:58:10.1042077Z Downloading pyrfc3339-2.1.1-py3-none-any.whl (6.5 kB)
+2026-11-17T20:58:10.1164323Z Downloading pytz-2026.6-py2.py3-none-any.whl (506 kB)
+2026-11-17T20:58:10.1664993Z Downloading standard_chunk-3.13.0-py3-none-any.whl (4.9 kB)
+2026-11-17T20:58:11.0545659Z Building wheels for collected packages: lru-dict, mock-open, PyRIC
+2026-11-17T20:58:11.0556176Z   Building wheel for lru-dict (pyproject.toml): started
+2026-11-17T20:58:11.7122758Z   Building wheel for lru-dict (pyproject.toml): finished with status 'done'
+2026-11-17T20:58:11.7124655Z   Created wheel for lru-dict: filename=lru_dict-1.3.0-cp313-cp313-linux_x86_64.whl size=31790 sha256=ce454af769c28ac3fbf334ae1be33e34c9450867130fd1d45c3a757ef55cbc0b
+2026-11-17T20:58:11.7124885Z   Stored in directory: /root/.cache/pip/wheels/ba/bd/ab/f0f7fbce8f8129c864c232547eb51631fd4396fa1832bb764b
+2026-11-17T20:58:11.7146236Z   Building wheel for mock-open (pyproject.toml): started
+2026-11-17T20:58:11.9558262Z   Building wheel for mock-open (pyproject.toml): finished with status 'done'
+2026-11-17T20:58:11.9562118Z   Created wheel for mock-open: filename=mock_open-1.4.0-py3-none-any.whl size=14643 sha256=a783a0e9f33f548994eac16bf46c56d672902ef5d6a34ba14879af845b7a5897
+2026-11-17T20:58:11.9562340Z   Stored in directory: /root/.cache/pip/wheels/bf/87/79/b4b2b207763f18de6f81bcf179e724a9da1faf86a199a24b60
+2026-11-17T20:58:11.9582797Z   Building wheel for PyRIC (pyproject.toml): started
+2026-11-17T20:58:12.2973744Z   Building wheel for PyRIC (pyproject.toml): finished with status 'done'
+2026-11-17T20:58:12.2978454Z   Created wheel for PyRIC: filename=pyric-0.1.6.3-py2.py3-none-any.whl size=407977 sha256=ca8a7d6c83a28a37b0f2abd9b8d2432da3e313a614deda8ad90bdcb04f82371e
+2026-11-17T20:58:12.2978688Z   Stored in directory: /root/.cache/pip/wheels/b4/9d/e8/a9ecfc2003f256579ac6b252c19a68ad41533502ef58e7e689
+2026-11-17T20:58:12.2991324Z Successfully built lru-dict mock-open PyRIC
+2026-11-17T20:58:12.6868266Z Installing collected packages: text-unidecode, standard-telnetlib, standard-chunk, pytz, PyRIC, mock-open, ifaddr, ciso8601, btsocket, boolean.py, zeroconf, voluptuous, uv, usb-devices, urllib3, ulid-transform, uart-devices, tzdata, typing-extensions, tqdm, termcolor, six, ruff, regex, PyYAML, python-slugify, pyrfc3339, pylint-per-file-ignores, PyJWT, pygments, pycparser, psutil, propcache, pluggy, Pillow, paho-mqtt, packaging, orjson, numpy, multidict, MarkupSafe, lru-dict, license-expression, jmespath, iniconfig, idna, icmplib, h11, greenlet, frozenlist, fnvhash, execnet, envs, dbus-fast, cronsim, coverage, charset_normalizer, certifi, bcrypt, awesomeversion, audioop-lts, attrs, atomicwrites-homeassistant, async_timeout, async-interrupt, astral, annotated-types, aiooui, aiohappyeyeballs, yarl, voluptuous-serialize, voluptuous-openapi, typing-inspection, standard-aifc, sqlalchemy, sentence-stream, requests, python-dateutil, pytest, pydantic-core, psutil-home-assistant, pipdeptree, mashumaro, Jinja2, httpcore, grpcio, fnv-hash-fast, cffi, bleak, anyio, annotatedyaml, aiozoneinfo, aiosignal, webrtc-models, syrupy, requests-mock, pytest-xdist, pytest-unordered, pytest-timeout, pytest-sugar, pytest-socket, pytest-picked, pytest-github-actions-annotate-failures, pytest-cov, pytest-asyncio, pydantic, pycares, httpx, freezegun, cryptography, botocore, bluetooth-adapters, aiohttp, snitun, securetar, s3transfer, respx, pytest-freezer, pytest-aiohttp, pyOpenSSL, josepy, bluetooth-data-tools, bluetooth-auto-recovery, bleak-retry-connector, aiohttp-fast-zlib, aiohttp_cors, aiohasupervisor, aiodns, habluetooth, boto3, aiohttp-asyncmdnsresolver, acme, pycognito, home-assistant-bluetooth, hass-nabucasa, homeassistant, pytest-homeassistant-custom-component
+2026-11-17T20:58:46.1090261Z 
+2026-11-17T20:58:46.1157507Z Successfully installed Jinja2-3.1.6 MarkupSafe-3.0.4 Pillow-12.0.0 PyJWT-2.10.1 PyRIC-0.1.6.3 PyYAML-6.0.3 acme-5.2.2 aiodns-4.0.0 aiohappyeyeballs-2.7.1 aiohasupervisor-0.3.3 aiohttp-3.13.3 aiohttp-asyncmdnsresolver-0.1.1 aiohttp-fast-zlib-0.3.0 aiohttp_cors-0.8.1 aiooui-0.1.11 aiosignal-1.4.0 aiozoneinfo-0.2.3 annotated-types-0.8.0 annotatedyaml-1.0.2 anyio-4.16.0 astral-2.2 async-interrupt-1.2.2 async_timeout-5.0.1 atomicwrites-homeassistant-1.4.1 attrs-25.4.0 audioop-lts-0.2.1 awesomeversion-25.8.0 bcrypt-5.0.0 bleak-3.1.0 bleak-retry-connector-4.7.1 bluetooth-adapters-2.4.0 bluetooth-auto-recovery-1.6.4 bluetooth-data-tools-1.28.4 boolean.py-5.0 boto3-1.44.5 botocore-1.44.5 btsocket-0.3.0 certifi-2026.10.23 cffi-2.1.1 charset_normalizer-3.5.2 ciso8601-2.3.3 coverage-7.10.6 cronsim-2.7 cryptography-46.0.5 dbus-fast-5.2.0 envs-1.4 execnet-2.1.2 fnv-hash-fast-1.6.0 fnvhash-0.2.1 freezegun-1.5.2 frozenlist-1.8.0 greenlet-3.5.6 grpcio-1.85.1 h11-0.16.0 habluetooth-6.1.0 hass-nabucasa-1.12.0 home-assistant-bluetooth-1.13.1 homeassistant-2026.2.3 httpcore-1.0.9 httpx-0.28.1 icmplib-3.0.4 idna-3.20 ifaddr-0.2.0 iniconfig-2.3.1 jmespath-1.1.0 josepy-2.3.0 license-expression-30.4.3 lru-dict-1.3.0 mashumaro-3.23 mock-open-1.4.0 multidict-6.9.1 numpy-2.3.2 orjson-3.11.5 packaging-26.3 paho-mqtt-2.1.0 pipdeptree-2.26.1 pluggy-1.7.0 propcache-0.4.1 psutil-7.2.2 psutil-home-assistant-0.0.1 pyOpenSSL-25.3.0 pycares-5.2.1 pycognito-2024.5.1 pycparser-3.12 pydantic-2.12.2 pydantic-core-2.41.4 pygments-2.21.0 pylint-per-file-ignores-1.4.0 pyrfc3339-2.1.1 pytest-9.0.0 pytest-aiohttp-1.1.0 pytest-asyncio-1.3.0 pytest-cov-7.0.0 pytest-freezer-0.4.9 pytest-github-actions-annotate-failures-0.3.0 pytest-homeassistant-custom-component-0.13.316 pytest-picked-0.5.1 pytest-socket-0.7.0 pytest-sugar-1.0.0 pytest-timeout-2.4.0 pytest-unordered-0.7.0 pytest-xdist-3.8.0 python-dateutil-2.9.0.post0 python-slugify-8.0.4 pytz-2026.6 regex-2026.11.15 requests-2.32.5 requests-mock-1.12.1 respx-0.22.0 ruff-0.17.5 s3transfer-0.19.3 securetar-2025.2.1 sentence-stream-1.4.0 six-1.17.0 snitun-0.45.1 sqlalchemy-2.0.41 standard-aifc-3.13.0 standard-chunk-3.13.0 standard-telnetlib-3.13.0 syrupy-5.0.0 termcolor-3.3.0 text-unidecode-1.3 tqdm-4.67.1 typing-extensions-4.16.0 typing-inspection-0.4.5 tzdata-2026.6 uart-devices-0.1.1 ulid-transform-1.5.2 urllib3-2.8.0 usb-devices-0.5.1 uv-0.9.26 voluptuous-0.15.2 voluptuous-openapi-0.2.0 voluptuous-serialize-2.7.0 webrtc-models-0.3.0 yarl-1.22.0 zeroconf-0.148.0
+2026-11-17T20:58:46.1157924Z WARNING: Running pip as the 'root' user can result in broken permissions and conflicting behaviour with the system package manager, possibly rendering your system unusable. It is recommended to use a virtual environment instead: https://pip.pypa.io/warnings/venv. Use the --root-user-action option if you know what you are doing and want to suppress this warning.
+2026-11-17T20:58:47.3581659Z ::group::Run ruff check custom_components tests
+2026-11-17T20:58:47.3581757Z ruff check custom_components tests
+2026-11-17T20:58:47.3581781Z shell: bash -e {0}
+2026-11-17T20:58:47.3581808Z ::endgroup::
+2026-11-17T20:58:47.4069634Z All checks passed!
+2026-11-17T20:58:47.4593695Z ::group::Run pytest -q --cov=custom_components/citipower_myenergy --cov-branch --cov-report=term-missing --cov-report=xml --cov-report=html
+2026-11-17T20:58:47.4593797Z pytest -q --cov=custom_components/citipower_myenergy --cov-branch --cov-report=term-missing --cov-report=xml --cov-report=html
+2026-11-17T20:58:47.4593823Z shell: bash -e {0}
+2026-11-17T20:58:47.4593849Z ::endgroup::
+2026-11-17T20:58:55.8135427Z ........................................................................ [  8%]
+2026-11-17T20:58:56.2015451Z ....................INFO:sqlalchemy.engine.Engine:INSERT INTO states_meta (entity_id) VALUES (?) RETURNING metadata_id
+2026-11-17T20:58:56.2016235Z .INFO:sqlalchemy.engine.Engine:[generated in 0.00042s] ('sensor.myenergy_6001234567_latest_data',)
+2026-11-17T20:58:56.2979305Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:56.2979601Z INFO:sqlalchemy.engine.Engine:[cached since 0.02523s ago] (438128614, '{"component":"button"}')
+2026-11-17T20:58:56.2983267Z INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:56.2986670Z .INFO:sqlalchemy.engine.Engine:[cached since 0.02482s ago] (None, None, None, 0, None, 1794949136.2904115, None, None, None, 8, <memory at 0x78dcb0694040>, None, None, 2)
+2026-11-17T20:58:56.4087126Z INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:56.4087438Z INFO:sqlalchemy.engine.Engine:[cached since 0.02198s ago] (None, None, None, 0, None, 1794949136.4010735, None, None, None, 7, <memory at 0x78dcb0696740>, None, None, 2)
+2026-11-17T20:58:56.5574481Z .INFO:sqlalchemy.engine.Engine:[cached since 0.02166s ago] (None, None, None, 0, None, 1794949136.5490131, None, None, None, 7, <memory at 0x78dcb093dd80>, None, None, 1)
+2026-11-17T20:58:56.5575591Z INFO:sqlalchemy.engine.Engine:COMMIT
+2026-11-17T20:58:56.9722188Z ..INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:56.9722543Z INFO:sqlalchemy.engine.Engine:[cached since 0.02545s ago] (None, None, None, 0, None, 1794949136.9654462, None, None, None, 7, <memory at 0x78dcb0b4a380>, None, None, 1)
+2026-11-17T20:58:56.9724616Z INFO:sqlalchemy.engine.Engine:COMMIT
+2026-11-17T20:58:57.1865555Z .INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:57.1865888Z INFO:sqlalchemy.engine.Engine:[cached since 0.07423s ago] (1217378306, '{"action":"create","entity_id":"sensor.myenergy_6001234567_latest_data"}')
+2026-11-17T20:58:57.1867546Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_types (event_type) VALUES (?) RETURNING event_type_id
+2026-11-17T20:58:57.4316070Z .INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:57.4316389Z INFO:sqlalchemy.engine.Engine:[cached since 0.04299s ago] (None, None, None, 0, None, 1794949137.4091508, None, None, None, 7, <memory at 0x78dcb0cd4e80>, None, None, 1)
+2026-11-17T20:58:57.4319651Z INFO:sqlalchemy.engine.Engine:COMMIT
+2026-11-17T20:58:57.4319882Z INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:57.4324081Z .INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:57.4324242Z FROM event_data 
+2026-11-17T20:58:57.4324268Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:57.6423451Z INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:57.6423698Z INFO:sqlalchemy.engine.Engine:[cached since 0.0471s ago] (None, None, None, 0, None, 1794949137.6301131, None, None, None, 7, <memory at 0x78dcb0290940>, None, None, 2)
+2026-11-17T20:58:57.6427140Z INFO:sqlalchemy.engine.Engine:COMMIT
+2026-11-17T20:58:57.6427371Z INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:57.6431791Z INFO:sqlalchemy.engine.Engine:SELECT event_types.event_type_id, event_types.event_type 
+2026-11-17T20:58:57.6432081Z FROM event_types 
+2026-11-17T20:58:57.6432109Z WHERE event_types.event_type IN (?)
+2026-11-17T20:58:57.6432125Z INFO:sqlalchemy.engine.Engine:[cached since 0.05525s ago] ('device_registry_updated',)
+2026-11-17T20:58:57.6436781Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:57.6436977Z FROM event_data 
+2026-11-17T20:58:57.6437010Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:57.6437025Z INFO:sqlalchemy.engine.Engine:[cached since 0.05718s ago] (383640147,)
+2026-11-17T20:58:57.6446206Z .INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:57.8858709Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:57.8859024Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:57.8859067Z FROM event_data 
+2026-11-17T20:58:57.8859120Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:57.8859154Z INFO:sqlalchemy.engine.Engine:[cached since 0.03871s ago] (2560854601,)
+2026-11-17T20:58:57.8866639Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:57.8866974Z INFO:sqlalchemy.engine.Engine:[cached since 0.03601s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:58:57.8869371Z INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:58.4702755Z ....INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:58.4703075Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:58.4703118Z FROM event_data 
+2026-11-17T20:58:58.4703143Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:58.4703168Z INFO:sqlalchemy.engine.Engine:[cached since 0.03165s ago] (2560854601,)
+2026-11-17T20:58:58.4713341Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:58.4715454Z .INFO:sqlalchemy.engine.Engine:[cached since 0.0283s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:58:58.5830335Z INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:58.5830659Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:58.5830694Z FROM event_data 
+2026-11-17T20:58:58.5830718Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:58.5830867Z INFO:sqlalchemy.engine.Engine:[cached since 0.03371s ago] (2560854601,)
+2026-11-17T20:58:58.5838538Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:58.5838801Z INFO:sqlalchemy.engine.Engine:[cached since 0.03104s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:58:58.7137469Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:58.7137791Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:58.7137836Z FROM event_data 
+2026-11-17T20:58:58.7137860Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:58.7137884Z INFO:sqlalchemy.engine.Engine:[cached since 0.04205s ago] (2560854601,)
+2026-11-17T20:58:58.7145856Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:58.7147111Z INFO:sqlalchemy.engine.Engine:[cached since 0.03882s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:58:58.7155674Z .INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:58.8203486Z INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:58.8203636Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:58.8203662Z FROM event_data 
+2026-11-17T20:58:58.8203682Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:58.8203707Z INFO:sqlalchemy.engine.Engine:[cached since 0.03344s ago] (2560854601,)
+2026-11-17T20:58:58.8212647Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:58.8212768Z INFO:sqlalchemy.engine.Engine:[cached since 0.03182s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:58:58.8220622Z .INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:58.9077831Z INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:58.9078187Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:58.9078219Z FROM event_data 
+2026-11-17T20:58:58.9078263Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:58.9078421Z INFO:sqlalchemy.engine.Engine:[cached since 0.02304s ago] (2560854601,)
+2026-11-17T20:58:58.9088393Z .INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:59.1907959Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:59.1908292Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:59.1908323Z FROM event_data 
+2026-11-17T20:58:59.1908348Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:59.1908371Z INFO:sqlalchemy.engine.Engine:[cached since 0.04067s ago] (2560854601,)
+2026-11-17T20:58:59.1913149Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:59.1913404Z INFO:sqlalchemy.engine.Engine:[cached since 0.03672s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:58:59.1918074Z INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:59.1918944Z INFO:sqlalchemy.engine.Engine:[cached since 0.03285s ago] (None, None, None, 0, None, 1794949139.1872299, None, None, None, 7, <memory at 0x78dcad1e99c0>, None, None, 2)
+2026-11-17T20:58:59.3092731Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:59.3093033Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:59.3093063Z FROM event_data 
+2026-11-17T20:58:59.3093087Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:59.3093271Z INFO:sqlalchemy.engine.Engine:[cached since 0.03182s ago] (2560854601,)
+2026-11-17T20:58:59.4343849Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:59.4344158Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:59.4344193Z FROM event_data 
+2026-11-17T20:58:59.4344217Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:59.4344241Z INFO:sqlalchemy.engine.Engine:[cached since 0.03638s ago] (2560854601,)
+2026-11-17T20:58:59.4352888Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:59.4353162Z INFO:sqlalchemy.engine.Engine:[cached since 0.03411s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:58:59.5366196Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:59.5366459Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:59.5366490Z FROM event_data 
+2026-11-17T20:58:59.5366508Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:59.5366653Z INFO:sqlalchemy.engine.Engine:[cached since 0.02511s ago] (2560854601,)
+2026-11-17T20:58:59.5374606Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:58:59.5374837Z INFO:sqlalchemy.engine.Engine:[cached since 0.02331s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:58:59.5383126Z .INFO:sqlalchemy.engine.Engine:INSERT INTO events (event_type, event_data, origin, origin_idx, time_fired, time_fired_ts, context_id, context_user_id, context_parent_id, data_id, context_id_bin, context_user_id_bin, context_parent_id_bin, event_type_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING event_id
+2026-11-17T20:58:59.6971683Z INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:59.6971987Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:59.6972043Z FROM event_data 
+2026-11-17T20:58:59.6972067Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:59.6972081Z INFO:sqlalchemy.engine.Engine:[cached since 0.0502s ago] (2560854601,)
+2026-11-17T20:58:59.8450524Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:59.8450805Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:59.8450835Z FROM event_data 
+2026-11-17T20:58:59.8450858Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:59.8450883Z INFO:sqlalchemy.engine.Engine:[cached since 0.0409s ago] (2560854601,)
+2026-11-17T20:58:59.9965475Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:58:59.9965760Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:58:59.9965792Z FROM event_data 
+2026-11-17T20:58:59.9965814Z WHERE event_data.hash IN (?)
+2026-11-17T20:58:59.9965840Z INFO:sqlalchemy.engine.Engine:[cached since 0.04752s ago] (2560854601,)
+2026-11-17T20:59:00.6047374Z ....INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:59:00.6047739Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:59:00.6047785Z FROM event_data 
+2026-11-17T20:59:00.6047816Z WHERE event_data.hash IN (?)
+2026-11-17T20:59:00.6047840Z INFO:sqlalchemy.engine.Engine:[cached since 0.03395s ago] (2560854601,)
+2026-11-17T20:59:00.6057998Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:59:00.6059259Z INFO:sqlalchemy.engine.Engine:[cached since 0.03159s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:59:00.7406409Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:59:00.7406727Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:59:00.7406756Z FROM event_data 
+2026-11-17T20:59:00.7406781Z WHERE event_data.hash IN (?)
+2026-11-17T20:59:00.7406808Z INFO:sqlalchemy.engine.Engine:[cached since 0.04424s ago] (2560854601,)
+2026-11-17T20:59:00.7416135Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:59:00.7416369Z INFO:sqlalchemy.engine.Engine:[cached since 0.0419s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:59:00.8545304Z .INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:59:00.8545659Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:59:00.8545695Z FROM event_data 
+2026-11-17T20:59:00.8545720Z WHERE event_data.hash IN (?)
+2026-11-17T20:59:00.8545745Z INFO:sqlalchemy.engine.Engine:[cached since 0.03631s ago] (2560854601,)
+2026-11-17T20:59:00.8552760Z INFO:sqlalchemy.engine.Engine:INSERT INTO event_data (hash, shared_data) VALUES (?, ?) RETURNING data_id
+2026-11-17T20:59:00.8556575Z .INFO:sqlalchemy.engine.Engine:[cached since 0.03443s ago] (2560854601, '{"component":"citipower_myenergy"}')
+2026-11-17T20:59:01.3432858Z ..INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:59:01.3433158Z INFO:sqlalchemy.engine.Engine:SELECT event_data.data_id, event_data.shared_data 
+2026-11-17T20:59:01.3433188Z FROM event_data 
+2026-11-17T20:59:01.3433210Z WHERE event_data.hash IN (?)
+2026-11-17T20:59:01.3433235Z INFO:sqlalchemy.engine.Engine:[cached since 0.05987s ago] (2560854601,)
+2026-11-17T20:59:02.0977005Z .....INFO:sqlalchemy.engine.Engine:BEGIN (implicit)
+2026-11-17T20:59:04.6053289Z ............ [ 16%]

@@ -202,11 +202,21 @@ async def test_other_portal_errors_are_a_failed_poll_not_an_ended_session(
 
 
 async def _poll_at(
-    hass: HomeAssistant, freezer, local: str, *, error: MyEnergyError | None = None
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    local: str,
+    *,
+    error: MyEnergyError | None = None,
 ) -> MyEnergyCoordinator:
-    """Poll at a Melbourne wall-clock time; the fake portal's newest data is 2026-10-21."""
-    await hass.config.async_set_time_zone("Australia/Melbourne")
-    freezer.move_to(f"{local}+11:00")
+    """Poll at a Melbourne wall-clock time; the fake portal's newest data is 2026-10-21.
+
+    The coordinator's clock is replaced rather than frozen: the recorder is running, and a
+    frozen clock in the past would stall the statistics write.
+    """
+    local_now = datetime.fromisoformat(f"{local}+11:00")
+    monkeypatch.setattr(
+        MyEnergyCoordinator, "_now", staticmethod(lambda tz=None: local_now if tz is None else local_now.astimezone(tz))
+    )
     coordinator = _coordinator(hass)
     if error:
         coordinator.api.async_meter_data.side_effect = error
@@ -218,34 +228,34 @@ async def _poll_at(
 
 
 async def test_a_complete_day_sleeps_until_the_next_catch_up_window(
-    recorder_mock: Recorder, hass: HomeAssistant, freezer
+    recorder_mock: Recorder, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # 2026-10-22 03:00: yesterday (the 21st) is in, so nothing is due until 02:30 tomorrow.
-    coordinator = await _poll_at(hass, freezer, "2026-10-22T03:00:00")
+    coordinator = await _poll_at(hass, monkeypatch, "2026-10-22T03:00:00")
     assert coordinator.update_interval == timedelta(hours=23, minutes=30)
 
 
 async def test_a_missing_day_is_retried_every_ten_minutes_in_the_window(
-    recorder_mock: Recorder, hass: HomeAssistant, freezer
+    recorder_mock: Recorder, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # 2026-10-23 03:00: the 22nd has not arrived (the newest data is the 21st).
-    coordinator = await _poll_at(hass, freezer, "2026-10-23T03:00:00")
+    coordinator = await _poll_at(hass, monkeypatch, "2026-10-23T03:00:00")
     assert coordinator.update_interval == CATCHUP_RETRY
 
 
 async def test_a_missing_day_outside_the_window_waits_for_the_next_one(
-    recorder_mock: Recorder, hass: HomeAssistant, freezer
+    recorder_mock: Recorder, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # 2026-10-23 12:00: the window closed at 08:30, so wait for 02:30 tomorrow.
-    coordinator = await _poll_at(hass, freezer, "2026-10-23T12:00:00")
+    coordinator = await _poll_at(hass, monkeypatch, "2026-10-23T12:00:00")
     assert coordinator.update_interval == timedelta(hours=14, minutes=30)
 
 
 async def test_a_failed_poll_retries_soon_and_a_good_one_resets_the_backoff(
-    recorder_mock: Recorder, hass: HomeAssistant, freezer
+    recorder_mock: Recorder, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     coordinator = await _poll_at(
-        hass, freezer, "2026-10-23T12:00:00", error=MyEnergyError("the portal is down")
+        hass, monkeypatch, "2026-10-23T12:00:00", error=MyEnergyError("the portal is down")
     )
     assert coordinator.update_interval == FAILURE_RETRY
     with pytest.raises(UpdateFailed):
@@ -259,7 +269,7 @@ async def test_a_failed_poll_retries_soon_and_a_good_one_resets_the_backoff(
 
 
 async def test_an_ended_session_schedules_no_further_poll(
-    recorder_mock: Recorder, hass: HomeAssistant, freezer
+    recorder_mock: Recorder, hass: HomeAssistant, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     coordinator = _coordinator(hass)
     before = coordinator.update_interval
