@@ -18,13 +18,17 @@ up to two years of history the portal already holds.
 
 ## Install
 
-1. HACS → ⋮ → **Custom repositories** → add this repository as an *Integration*.
-2. Install **CitiPower & Powercor myEnergy**, then restart Home Assistant.
+1. This integration is in the [HACS](https://hacs.xyz) default store. Open HACS, search for
+   **CitiPower & Powercor myEnergy** and download it (no custom repository needed).
+2. Restart Home Assistant.
 3. **Settings → Devices & services → Add integration → CitiPower & Powercor myEnergy**.
 4. Enter your myEnergy email and password, choose email or SMS, and enter the
    6-digit code.
 
 The first import of history takes about half a minute.
+
+HACS tells you when a new release is out and updates it like any other integration. To try a
+pre-release, open the integration in HACS → ⋮ → **Redownload** and choose the version.
 
 ## Energy dashboard
 
