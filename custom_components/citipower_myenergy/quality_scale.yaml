@@ -134,7 +134,7 @@ rules:
     comment: No discovery.
   docs-data-update:
     status: done
-    comment: README says the portal publishes the previous day each morning and the integration refreshes every 4 hours.
+    comment: README says the portal publishes the previous day each morning and the integration polls in a nightly catch-up window (02:30 to 08:30, every 10 minutes until yesterday's data arrives).
   docs-examples:
     status: done
     comment: README Sensors for automations has example automations.

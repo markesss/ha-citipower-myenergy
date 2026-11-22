@@ -37,7 +37,7 @@ first unchecked box.
 - [x] `api.py`: chunked meter data (≤90 days per call, sequential `jobId`)
 - [x] `statistics.py`: external statistics per channel, repair-from-first-disagreement
 - [x] `session_store.py`: cookies + Aura context persisted, tied to the `signed_in_at` of the sign-in
-- [x] `coordinator.py`: 4-hourly poll, first-run full backfill, 7-day refresh
+- [x] `coordinator.py`: nightly catch-up window poll (`schedule.py`), first-run full backfill, 7-day refresh
       window, keep-alive (default 45 min) and reauth on expiry
 - [x] `config_flow.py`: user → method → code (with resend) → nmi; reauth; options
 - [x] `sensor.py`, `diagnostics.py`, `manifest.json`, `strings.json`, `translations/en.json`

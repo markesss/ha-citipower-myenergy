@@ -52,6 +52,7 @@ custom_components/citipower_myenergy/
   statistics.py     HA recorder: external statistics with repair-on-change
   session_store.py  HA Store: cookies + Aura context across restarts
   tls.py            HTTP sessions with the portal's missing TLS intermediate (certs/)
+  schedule.py       PURE: catch-up window; the delay to the next poll after a success or failure
   coordinator.py    DataUpdateCoordinator + keep-alive loop + reauth trigger
   config_flow.py    user → method (email/SMS) → code → nmi; reauth; options
   sensor.py         latest data, latest-day kWh per channel, session status; with a tariff,

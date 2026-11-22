@@ -6,7 +6,7 @@ import logging
 import random
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, tzinfo
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -32,6 +32,7 @@ from .const import (
 from .exceptions import MyEnergyAuthError, MyEnergyError, TariffError
 from .models import AccountInfo
 from .nem12 import Channel, daily_total
+from .schedule import after_failure, after_success
 from .session_store import SessionStore
 from .statistics import (
     async_insert_channel,
@@ -101,6 +102,7 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
         self.session_dead = False
         self.session_dead_since: datetime | None = None
         self._stopped = False  # set on unload; an in-flight keep-alive must then do nothing more
+        self._failures = 0  # polls failed in a row, for the retry backoff
 
         # The statistics import is the point of the integration, so polling
         # must continue even when no entity is listening.
@@ -118,7 +120,44 @@ class MyEnergyCoordinator(DataUpdateCoordinator[MyEnergyData]):
 
     # --- Polling ----------------------------------------------------------------
 
+    @staticmethod
+    def _now(tz: tzinfo | None = None) -> datetime:
+        """Return the current time; one place to replace in tests (the clock cannot be frozen
+        into the past while the recorder is running)."""
+        return dt_util.now(tz)
+
     async def _async_update_data(self) -> MyEnergyData:
+        """Poll, then set the delay to the next poll (Home Assistant re-arms from it)."""
+        try:
+            data = await self._async_poll()
+        except ConfigEntryAuthFailed:
+            raise  # no next poll is scheduled until the user signs in again
+        except Exception:
+            self._failures += 1
+            self.update_interval = after_failure(
+                self._now(),
+                yesterday_complete=self._yesterday_complete(self.data),
+                failures=self._failures,
+            )
+            raise
+        self._failures = 0
+        self.update_interval = after_success(
+            self._now(), yesterday_complete=self._yesterday_complete(data)
+        )
+        _LOGGER.debug("Next myEnergy poll for %s in %s", self.log_name, self.update_interval)
+        return data
+
+    def _yesterday_complete(self, data: MyEnergyData | None) -> bool:
+        """Return whether the portal has published yesterday's readings (market time)."""
+        if data is None:
+            return False
+        yesterday = self._now(MARKET_TZ).date() - timedelta(days=1)
+        return any(
+            summary.last_day is not None and summary.last_day >= yesterday
+            for summary in data.channels.values()
+        )
+
+    async def _async_poll(self) -> MyEnergyData:
         try:
             account = await self.api.async_account_info(self.nmi)
             self._touched()

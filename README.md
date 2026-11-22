@@ -15,6 +15,12 @@ up to two years of history the portal already holds.
 > The portal publishes each day's readings the following morning (about 1am),
 > so this is yesterday's data, not live data. For real-time readings, see
 > CitiPower/Powercor's Zigbee in-home display program.
+>
+> **When it polls:** the portal gives no publication time, so the integration looks for the new
+> day in a catch-up window from 02:30 to 08:30 Home Assistant time, every 10 minutes until
+> yesterday's readings arrive, then sleeps until the next night's window. A failed poll retries
+> after 30 minutes, doubling to 2 hours, and never later than the next window. A day that has
+> not arrived by 08:30 is left for the next window; the Refresh data button polls on demand.
 
 ## Install
 
